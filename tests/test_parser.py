@@ -170,3 +170,15 @@ def test_as_dict_without_products(normal):
     assert "products" not in data
     assert data["day"] == "2026-10-07"
     assert data["fibre"] == 6.2
+
+
+def test_amount_split_only_when_text_starts_with_a_quantity():
+    from custom_components.fddb.parser import _AMOUNT
+
+    assert _AMOUNT.match("150 g Pizza").groups() == ("150 g", "Pizza")
+    assert _AMOUNT.match("1 Scoop Impact Whey Protein, Cookies & Cream").groups() == (
+        "1 Scoop",
+        "Impact Whey Protein, Cookies & Cream",
+    )
+    assert _AMOUNT.match("0.5 Portion Salat").groups() == ("0.5 Portion", "Salat")
+    assert _AMOUNT.match("Bio Apfel Saft") is None

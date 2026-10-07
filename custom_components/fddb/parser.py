@@ -65,6 +65,8 @@ class DiaryDay:
 
 
 _NUMBER = re.compile(r"[^0-9.]")
+# "150 g Pizza", "1 Scoop Whey", "0.5 Portion Salat": amount = number + unit, rest = name.
+_AMOUNT = re.compile(r"^(\d[\d.,/]*\s+\S+)\s+(.+)$")
 _SUGAR = re.compile(r"thereof\s+sugar", re.IGNORECASE)
 _FIBRE = re.compile(r"dietary\s+fib(re|er)", re.IGNORECASE)
 _LOGIN_TEXTS = {"login", "anmelden"}
@@ -107,11 +109,8 @@ def _parse_product(cells: list[Tag]) -> Product:
     if link is None:
         raise FddbParseError("Product row without a link")
     text = link.get_text(" ", strip=True)
-    parts = text.split(" ", 2)
-    if len(parts) == 3:
-        amount, name = f"{parts[0]} {parts[1]}", parts[2]
-    else:
-        amount, name = None, text
+    match = _AMOUNT.match(text)
+    amount, name = (match.group(1), match.group(2)) if match else (None, text)
     time_span = cells[0].select_one("span.mydayshowtime")
     return Product(
         name=name.strip(),

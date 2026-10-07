@@ -189,6 +189,9 @@ class FddbCoordinator(DataUpdateCoordinator[FddbData]):
         yesterday = fddb_today() - timedelta(days=1)
         try:
             self._remember(await self.client.fetch_day(yesterday), final=True)
+        except FddbAuthError:
+            self.config_entry.async_start_reauth(self.hass)
+            return
         except FddbError as err:
             _LOGGER.warning("Could not finalise %s: %s", yesterday, err)
             return
@@ -203,6 +206,9 @@ class FddbCoordinator(DataUpdateCoordinator[FddbData]):
                 continue
             try:
                 self._remember(await self.client.fetch_day(day), final=True)
+            except FddbAuthError:
+                self.config_entry.async_start_reauth(self.hass)
+                return
             except FddbError as err:
                 _LOGGER.warning("History backfill stopped at %s: %s", day, err)
                 return
