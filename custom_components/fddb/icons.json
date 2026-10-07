@@ -1,0 +1,31 @@
+{
+  "entity": {
+    "sensor": {
+      "calories": { "default": "mdi:fire" },
+      "fat": { "default": "mdi:water" },
+      "carbs": { "default": "mdi:bread-slice" },
+      "sugar": { "default": "mdi:cube-outline" },
+      "protein": { "default": "mdi:food-steak" },
+      "fibre": { "default": "mdi:leaf" },
+      "products": { "default": "mdi:format-list-bulleted" },
+      "protein_share": { "default": "mdi:chart-pie" },
+      "carbs_share": { "default": "mdi:chart-pie" },
+      "fat_share": { "default": "mdi:chart-pie" },
+      "calories_yesterday": { "default": "mdi:calendar-arrow-left" },
+      "calories_week": { "default": "mdi:calendar-week" },
+      "calories_month": { "default": "mdi:calendar-month" },
+      "calories_avg_7d": { "default": "mdi:chart-line" },
+      "calories_avg_30d": { "default": "mdi:chart-line" },
+      "streak": { "default": "mdi:fire-circle" },
+      "calories_remaining": { "default": "mdi:scale-balance" },
+      "goal_progress": { "default": "mdi:bullseye-arrow" }
+    },
+    "number": {
+      "goal": { "default": "mdi:bullseye" }
+    }
+  },
+  "services": {
+    "refresh": { "service": "mdi:refresh" },
+    "get_diary": { "service": "mdi:notebook-outline" }
+  }
+}

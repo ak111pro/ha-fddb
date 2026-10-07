@@ -1,0 +1,154 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "FDDB",
+        "description": "Sign in with your fddb.info account.",
+        "data": {
+          "username": "Username or e-mail",
+          "password": "Password"
+        }
+      },
+      "reauth_confirm": {
+        "title": "Sign in again",
+        "description": "The FDDB login for {username} no longer works. Enter the current password.",
+        "data": {
+          "password": "Password"
+        }
+      }
+    },
+    "error": {
+      "invalid_auth": "Login failed, check username and password.",
+      "cannot_connect": "fddb.info could not be reached.",
+      "unexpected_page": "fddb.info answered with an unexpected page. The website may have changed."
+    },
+    "abort": {
+      "already_configured": "This FDDB account is already set up.",
+      "reauth_successful": "Signed in again."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Options",
+        "data": {
+          "update_interval": "Update interval"
+        },
+        "data_description": {
+          "update_interval": "How often today's diary is read from fddb.info. Use the refresh action for immediate updates."
+        }
+      }
+    }
+  },
+  "entity": {
+    "sensor": {
+      "calories": {
+        "name": "Calories today"
+      },
+      "fat": {
+        "name": "Fat today"
+      },
+      "carbs": {
+        "name": "Carbohydrates today"
+      },
+      "sugar": {
+        "name": "Sugar today"
+      },
+      "protein": {
+        "name": "Protein today"
+      },
+      "fibre": {
+        "name": "Fibre today"
+      },
+      "products": {
+        "name": "Products today"
+      },
+      "protein_share": {
+        "name": "Protein share"
+      },
+      "carbs_share": {
+        "name": "Carbohydrate share"
+      },
+      "fat_share": {
+        "name": "Fat share"
+      },
+      "calories_yesterday": {
+        "name": "Calories yesterday"
+      },
+      "calories_week": {
+        "name": "Calories this week"
+      },
+      "calories_month": {
+        "name": "Calories this month"
+      },
+      "calories_avg_7d": {
+        "name": "Average calories 7 days"
+      },
+      "calories_avg_30d": {
+        "name": "Average calories 30 days"
+      },
+      "streak": {
+        "name": "Logging streak"
+      },
+      "calories_remaining": {
+        "name": "Calories remaining"
+      },
+      "goal_progress": {
+        "name": "Goal progress"
+      },
+      "last_update": {
+        "name": "Last update"
+      }
+    },
+    "number": {
+      "goal": {
+        "name": "Daily calorie goal"
+      }
+    },
+    "binary_sensor": {
+      "problem": {
+        "name": "Problem"
+      }
+    }
+  },
+  "services": {
+    "refresh": {
+      "name": "Refresh",
+      "description": "Reads today's diary from fddb.info now.",
+      "fields": {
+        "config_entry_id": {
+          "name": "Account",
+          "description": "Only refresh this FDDB account."
+        }
+      }
+    },
+    "get_diary": {
+      "name": "Get diary",
+      "description": "Returns the totals and all products of one day.",
+      "fields": {
+        "config_entry_id": {
+          "name": "Account",
+          "description": "FDDB account to read (required if more than one is set up)."
+        },
+        "date": {
+          "name": "Date",
+          "description": "Day to read, default today."
+        }
+      }
+    }
+  },
+  "exceptions": {
+    "no_loaded_entry": {
+      "message": "No loaded FDDB account found."
+    },
+    "multiple_entries": {
+      "message": "Several FDDB accounts are set up, choose one."
+    },
+    "future_date": {
+      "message": "The date must not be in the future."
+    },
+    "refresh_failed": {
+      "message": "Reading fddb.info failed: {error}"
+    }
+  }
+}

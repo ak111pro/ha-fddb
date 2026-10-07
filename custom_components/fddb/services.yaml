@@ -1,0 +1,17 @@
+refresh:
+  fields:
+    config_entry_id:
+      selector:
+        config_entry:
+          integration: fddb
+
+get_diary:
+  fields:
+    config_entry_id:
+      selector:
+        config_entry:
+          integration: fddb
+    date:
+      example: "2026-10-07"
+      selector:
+        date:

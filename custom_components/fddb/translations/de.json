@@ -1,0 +1,154 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "FDDB",
+        "description": "Melde dich mit deinem fddb.info-Konto an.",
+        "data": {
+          "username": "Benutzername oder E-Mail",
+          "password": "Passwort"
+        }
+      },
+      "reauth_confirm": {
+        "title": "Erneut anmelden",
+        "description": "Die FDDB-Anmeldung für {username} funktioniert nicht mehr. Gib das aktuelle Passwort ein.",
+        "data": {
+          "password": "Passwort"
+        }
+      }
+    },
+    "error": {
+      "invalid_auth": "Anmeldung fehlgeschlagen, prüfe Benutzername und Passwort.",
+      "cannot_connect": "fddb.info ist nicht erreichbar.",
+      "unexpected_page": "fddb.info hat eine unerwartete Seite geliefert. Die Website hat sich vermutlich geändert."
+    },
+    "abort": {
+      "already_configured": "Dieses FDDB-Konto ist bereits eingerichtet.",
+      "reauth_successful": "Erneut angemeldet."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Optionen",
+        "data": {
+          "update_interval": "Aktualisierungsintervall"
+        },
+        "data_description": {
+          "update_interval": "Wie oft das heutige Tagebuch von fddb.info gelesen wird. Für sofortige Aktualisierungen gibt es die Aktion „Aktualisieren“."
+        }
+      }
+    }
+  },
+  "entity": {
+    "sensor": {
+      "calories": {
+        "name": "Kalorien heute"
+      },
+      "fat": {
+        "name": "Fett heute"
+      },
+      "carbs": {
+        "name": "Kohlenhydrate heute"
+      },
+      "sugar": {
+        "name": "Zucker heute"
+      },
+      "protein": {
+        "name": "Eiweiß heute"
+      },
+      "fibre": {
+        "name": "Ballaststoffe heute"
+      },
+      "products": {
+        "name": "Produkte heute"
+      },
+      "protein_share": {
+        "name": "Eiweißanteil"
+      },
+      "carbs_share": {
+        "name": "Kohlenhydratanteil"
+      },
+      "fat_share": {
+        "name": "Fettanteil"
+      },
+      "calories_yesterday": {
+        "name": "Kalorien gestern"
+      },
+      "calories_week": {
+        "name": "Kalorien diese Woche"
+      },
+      "calories_month": {
+        "name": "Kalorien diesen Monat"
+      },
+      "calories_avg_7d": {
+        "name": "Durchschnitt Kalorien 7 Tage"
+      },
+      "calories_avg_30d": {
+        "name": "Durchschnitt Kalorien 30 Tage"
+      },
+      "streak": {
+        "name": "Erfassungsserie"
+      },
+      "calories_remaining": {
+        "name": "Verbleibende Kalorien"
+      },
+      "goal_progress": {
+        "name": "Zielerreichung"
+      },
+      "last_update": {
+        "name": "Letzte Aktualisierung"
+      }
+    },
+    "number": {
+      "goal": {
+        "name": "Tägliches Kalorienziel"
+      }
+    },
+    "binary_sensor": {
+      "problem": {
+        "name": "Problem"
+      }
+    }
+  },
+  "services": {
+    "refresh": {
+      "name": "Aktualisieren",
+      "description": "Liest das heutige Tagebuch jetzt von fddb.info.",
+      "fields": {
+        "config_entry_id": {
+          "name": "Konto",
+          "description": "Nur dieses FDDB-Konto aktualisieren."
+        }
+      }
+    },
+    "get_diary": {
+      "name": "Tagebuch abrufen",
+      "description": "Liefert die Summen und alle Produkte eines Tages.",
+      "fields": {
+        "config_entry_id": {
+          "name": "Konto",
+          "description": "FDDB-Konto (nötig, wenn mehrere eingerichtet sind)."
+        },
+        "date": {
+          "name": "Datum",
+          "description": "Abzurufender Tag, Standard heute."
+        }
+      }
+    }
+  },
+  "exceptions": {
+    "no_loaded_entry": {
+      "message": "Kein geladenes FDDB-Konto gefunden."
+    },
+    "multiple_entries": {
+      "message": "Mehrere FDDB-Konten eingerichtet, wähle eines aus."
+    },
+    "future_date": {
+      "message": "Das Datum darf nicht in der Zukunft liegen."
+    },
+    "refresh_failed": {
+      "message": "Lesen von fddb.info fehlgeschlagen: {error}"
+    }
+  }
+}
