@@ -137,12 +137,16 @@ def test_footer_with_too_few_cells_raises_parse_error(normal_html):
         parse_diary(html, DAY)
 
 
-def test_product_row_without_link_raises_parse_error(normal_html):
+def test_own_food_without_link_is_read_from_cell_text(normal_html):
+    # Own foods and recipes have no link to the food database (seen live 2026-10-07).
     html = normal_html.replace(
-        '<a href="/db/en/food/test/coffee/index.html">Coffee</a>', "Coffee"
+        '<a href="/db/en/food/test/coffee/index.html">Coffee</a>', "0.7 Portions Coffee"
     )
-    with pytest.raises(FddbParseError, match="link"):
-        parse_diary(html, DAY)
+    coffee = [p for p in parse_diary(html, DAY).products if p.name == "Coffee"]
+    assert len(coffee) == 1
+    assert coffee[0].amount == "0.7 Portions"
+    assert coffee[0].link is None
+    assert coffee[0].time is None  # this synthetic row has no time span
 
 
 def test_as_dict(normal):

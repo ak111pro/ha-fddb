@@ -105,13 +105,20 @@ def _is_category_row(cells: list[Tag]) -> bool:
 
 
 def _parse_product(cells: list[Tag]) -> Product:
-    link = cells[0].find("a")
-    if link is None:
-        raise FddbParseError("Product row without a link")
-    text = link.get_text(" ", strip=True)
+    first = cells[0]
+    time_span = first.select_one("span.mydayshowtime")
+    link = first.find("a")
+    if link is not None:
+        text = link.get_text(" ", strip=True)
+    else:
+        # Own foods and recipes have no link to the food database, only plain text.
+        text = " ".join(
+            s.strip() for s in first.find_all(string=True) if not (time_span and s.parent is time_span)
+        ).strip()
+    if not text:
+        raise FddbParseError("Product row without a name")
     match = _AMOUNT.match(text)
     amount, name = (match.group(1), match.group(2)) if match else (None, text)
-    time_span = cells[0].select_one("span.mydayshowtime")
     return Product(
         name=name.strip(),
         amount=amount,
@@ -119,7 +126,7 @@ def _parse_product(cells: list[Tag]) -> Product:
         fat=_cell_value(cells[3]),
         carbs=_cell_value(cells[4]),
         protein=_cell_value(cells[5]),
-        link=link.get("href"),
+        link=link.get("href") if link is not None else None,
         time=time_span.get_text(strip=True) if time_span else None,
     )
 
