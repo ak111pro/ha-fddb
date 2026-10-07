@@ -118,4 +118,5 @@ async def async_setup_entry(hass: HomeAssistant, entry: FddbConfigEntry) -> bool
 
 async def async_unload_entry(hass: HomeAssistant, entry: FddbConfigEntry) -> bool:
     """Unload a config entry."""
+    await entry.runtime_data.async_flush()
     return await hass.config_entries.async_unload_platforms(entry, PLATFORMS)

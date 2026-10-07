@@ -84,12 +84,16 @@ class FddbCoordinator(DataUpdateCoordinator[FddbData]):
         self.goal = stored.get("goal")
         self._backfilled = stored.get("backfilled", False)
 
+    def _data(self) -> dict[str, Any]:
+        return {"days": self._days, "goal": self.goal, "backfilled": self._backfilled}
+
     @callback
     def _schedule_save(self) -> None:
-        self._store.async_delay_save(
-            lambda: {"days": self._days, "goal": self.goal, "backfilled": self._backfilled},
-            10,
-        )
+        self._store.async_delay_save(self._data, 10)
+
+    async def async_flush(self) -> None:
+        """Write pending changes now, so a reload never loads stale data."""
+        await self._store.async_save(self._data())
 
     def _remember(self, diary: DiaryDay, final: bool) -> None:
         record = {key: getattr(diary, key) for key in TOTAL_KEYS}
