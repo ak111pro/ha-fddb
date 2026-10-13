@@ -26,10 +26,12 @@ from .const import (
     FDDB_TZ,
     FINALIZE_TIME,
     KEEP_DAYS,
+    PROFILE_REFRESH_INTERVAL,
+    PROFILE_RETRY_INTERVAL,
     REQUEST_PAUSE,
     STORAGE_VERSION,
 )
-from .parser import DiaryDay, FddbAuthError, FddbError, FddbParseError
+from .parser import DiaryDay, FddbAuthError, FddbError, FddbParseError, Profile
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -86,8 +88,15 @@ class FddbCoordinator(DataUpdateCoordinator[FddbData]):
         self._days: dict[str, dict[str, Any]] = {}
         # Manual goal (number entity); None or 0 means "use the goal from FDDB".
         self.goal: float | None = None
-        # Last daily calorie goal read from the FDDB diary page, None until one was seen.
+        # Required calories per day as read from the FDDB settings page, None until one was seen.
         self.fddb_goal: float | None = None
+        # Profile values (height, weight, ...) from the same page. Read once at setup and then
+        # every PROFILE_REFRESH_INTERVAL; the last known values are kept (and stored) when a
+        # refresh fails. ``_profile_next`` is when the next read is due (None = at the next poll).
+        self.profile: Profile | None = None
+        self.profile_updated: datetime | None = None
+        self._profile_next: datetime | None = None
+        self._profile_failing = False
         self._backfilled = False
         self._unsub_finalize = None
         # Diagnostics (bookkeeping of the regular poll only, not of background jobs). The time
@@ -108,6 +117,9 @@ class FddbCoordinator(DataUpdateCoordinator[FddbData]):
         self._days = stored.get("days", {})
         self.goal = stored.get("goal")
         self.fddb_goal = stored.get("fddb_goal")
+        if stored.get("profile") is not None:
+            self.profile = Profile.from_dict(stored["profile"])
+            self.profile_updated = _parse_time(stored.get("profile_updated"))
         self._backfilled = stored.get("backfilled", False)
         diagnostics = stored.get("diagnostics", {})
         self.last_success = _parse_time(diagnostics.get("last_success"))
@@ -121,6 +133,8 @@ class FddbCoordinator(DataUpdateCoordinator[FddbData]):
             "days": self._days,
             "goal": self.goal,
             "fddb_goal": self.fddb_goal,
+            "profile": self.profile.as_dict() if self.profile else None,
+            "profile_updated": _format_time(self.profile_updated),
             "backfilled": self._backfilled,
             "diagnostics": {
                 "last_success": _format_time(self.last_success),
@@ -200,6 +214,8 @@ class FddbCoordinator(DataUpdateCoordinator[FddbData]):
             self._record_failure(err, monotonic() - started)
             raise
         self._record_success(monotonic() - started)
+        # After the bookkeeping, so the fetch duration sensor measures the regular poll only.
+        await self._async_refresh_profile()
         return data
 
     def _record_success(self, duration: float) -> None:
@@ -220,11 +236,6 @@ class FddbCoordinator(DataUpdateCoordinator[FddbData]):
         today = fddb_today()
         diary = await self._fetch(today)
         self._remember(diary, final=False)
-        # Only today's page counts, and a page without a goal keeps the last known one: an empty
-        # diary day may not show it at all.
-        if diary.calorie_goal is not None and diary.calorie_goal != self.fddb_goal:
-            self.fddb_goal = diary.calorie_goal
-            self._schedule_save()
 
         # Make sure yesterday has its full value once the day has changed.
         yesterday = (today - timedelta(days=1)).isoformat()
@@ -232,6 +243,37 @@ class FddbCoordinator(DataUpdateCoordinator[FddbData]):
             self._remember(await self._fetch(today - timedelta(days=1)), final=True)
 
         return self._build(diary)
+
+    async def _async_refresh_profile(self) -> None:
+        """Read the settings page when it is due. Never raises: the diary matters more.
+
+        The last known profile stays in place when a read fails, and the next try is made after
+        PROFILE_RETRY_INTERVAL instead of at every poll.
+        """
+        now = datetime.now(timezone.utc)
+        if self._profile_next is not None and now < self._profile_next:
+            return
+        try:
+            profile = await self.client.fetch_profile()
+        except FddbAuthError:
+            # The diary was just read with this session, so this is unexpected: ask for a new
+            # login rather than retrying a rejected password every hour.
+            self._profile_next = now + PROFILE_RETRY_INTERVAL
+            self.config_entry.async_start_reauth(self.hass)
+            return
+        except FddbError as err:
+            self._profile_next = now + PROFILE_RETRY_INTERVAL
+            level = logging.DEBUG if self._profile_failing else logging.WARNING
+            _LOGGER.log(level, "Could not read the FDDB profile page: %s", err)
+            self._profile_failing = True
+            return
+        self._profile_failing = False
+        self._profile_next = now + PROFILE_REFRESH_INTERVAL
+        self.profile = profile
+        self.profile_updated = now
+        # What FDDB shows now is the goal; a page that no longer shows it clears the old value.
+        self.fddb_goal = profile.calorie_goal
+        self._schedule_save()
 
     def _build(self, today_diary: DiaryDay) -> FddbData:
         today = today_diary.day

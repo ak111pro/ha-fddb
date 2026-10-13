@@ -10,6 +10,7 @@ from __future__ import annotations
 import asyncio
 from datetime import datetime, timedelta, timezone
 import importlib
+import sys
 from types import SimpleNamespace
 
 import pytest
@@ -46,9 +47,21 @@ class FakeStore:
 class FakeClient:
     """Returns prepared diaries or raises prepared errors, in order of the days asked for."""
 
-    def __init__(self, results):
+    def __init__(self, results, profile=None):
         self.results = results
         self.calls = []
+        # What fetch_profile returns (a Profile, an exception, or a list of them in turn).
+        self.profile = profile
+        self.profile_calls = 0
+
+    async def fetch_profile(self):
+        self.profile_calls += 1
+        if self.profile is None:  # tests that do not care about the profile: page unreachable
+            raise sys.modules["fddb_under_test.parser"].FddbConnectionError("no profile")
+        result = self.profile.pop(0) if isinstance(self.profile, list) else self.profile
+        if isinstance(result, Exception):
+            raise result
+        return result
 
     async def fetch_day(self, day):
         self.calls.append(day)
@@ -148,25 +161,32 @@ def test_backfill_completes_when_every_day_works(mods, monkeypatch):
 # --- daily calorie goal (#4) ---------------------------------------------------------------
 
 
-def test_poll_remembers_the_goal_from_fddb_and_keeps_it(mods):
-    today = mods.coordinator.fddb_today()
-    answers = [
-        mods.parser.DiaryDay(day=today, calorie_goal=2400.0),
-        mods.parser.DiaryDay(day=today),  # a page that shows no goal keeps the last known one
-        mods.parser.DiaryDay(day=today, calorie_goal=2200.0),
-    ]
+def _profile(mods, calorie_goal=2000.0, **kwargs):
+    return mods.parser.Profile(calorie_goal=calorie_goal, height_cm=172.0, **kwargs)
 
+
+def test_goal_comes_from_the_profile(mods):
     async def scenario(coordinator):
-        seen = []
-        for _ in range(3):
-            await coordinator._async_update_data()  # noqa: SLF001
-            seen.append(coordinator.fddb_goal)
-        return seen, coordinator._data()  # noqa: SLF001
+        await coordinator._async_update_data()  # noqa: SLF001
+        return coordinator, coordinator._data()  # noqa: SLF001
 
-    client = FakeClient(lambda day: answers.pop(0) if day == today else _diary(mods, day))
-    seen, stored = run(mods, client, scenario)
-    assert seen == [2400.0, 2400.0, 2200.0]
-    assert stored["fddb_goal"] == 2200.0
+    client = FakeClient(lambda day: _diary(mods, day), profile=_profile(mods))
+    coordinator, stored = run(mods, client, scenario)
+    assert coordinator.fddb_goal == 2000.0
+    assert coordinator.effective_goal == (2000.0, "fddb")
+    assert stored["fddb_goal"] == 2000.0
+    assert stored["profile"]["height_cm"] == 172.0
+    assert stored["profile_updated"] is not None
+
+
+def test_a_profile_without_a_goal_clears_the_old_goal(mods):
+    async def scenario(coordinator):
+        coordinator.fddb_goal = 2400.0
+        await coordinator._async_update_data()  # noqa: SLF001
+        return coordinator.fddb_goal
+
+    client = FakeClient(lambda day: _diary(mods, day), profile=_profile(mods, calorie_goal=None))
+    assert run(mods, client, scenario) is None
 
 
 def test_stored_goal_is_loaded(mods):
@@ -196,6 +216,113 @@ def test_effective_goal(mods, manual, fddb, expected):
         return coordinator.effective_goal
 
     assert run(mods, FakeClient(None), scenario) == expected
+
+
+# --- profile refresh cadence (#4, #10) ----------------------------------------------------
+
+
+def test_profile_is_read_at_setup_and_then_only_when_due(mods):
+    async def scenario(coordinator):
+        for _ in range(3):  # three polls within the refresh interval
+            await coordinator._async_update_data()  # noqa: SLF001
+        first = client.profile_calls
+        # the refresh interval has passed
+        coordinator._profile_next = datetime.now(timezone.utc) - timedelta(seconds=1)  # noqa: SLF001
+        await coordinator._async_update_data()  # noqa: SLF001
+        return first, client.profile_calls
+
+    client = FakeClient(lambda day: _diary(mods, day), profile=_profile(mods))
+    assert run(mods, client, scenario) == (1, 2)
+
+
+def test_next_profile_read_is_about_six_hours_away(mods):
+    async def scenario(coordinator):
+        before = datetime.now(timezone.utc)
+        await coordinator._async_update_data()  # noqa: SLF001
+        return coordinator._profile_next - before  # noqa: SLF001
+
+    client = FakeClient(lambda day: _diary(mods, day), profile=_profile(mods))
+    delta = run(mods, client, scenario)
+    assert timedelta(hours=5, minutes=59) < delta <= timedelta(hours=6, seconds=5)
+
+
+def test_failed_profile_read_keeps_old_values_retries_later_and_never_fails_the_poll(mods):
+    async def scenario(coordinator):
+        await coordinator._async_update_data()  # noqa: SLF001
+        first = coordinator.profile
+        coordinator._profile_next = datetime.now(timezone.utc) - timedelta(seconds=1)  # noqa: SLF001
+        data = await coordinator._async_update_data()  # noqa: SLF001
+        retry = coordinator._profile_next - datetime.now(timezone.utc)  # noqa: SLF001
+        return first, coordinator.profile, data, retry, coordinator.consecutive_errors
+
+    client = FakeClient(
+        lambda day: _diary(mods, day),
+        profile=[_profile(mods), mods.parser.FddbParseError("odd page")],
+    )
+    first, kept, data, retry, errors = run(mods, client, scenario)
+    assert kept is first
+    assert data is not None
+    assert timedelta(minutes=59) < retry <= timedelta(hours=1, seconds=5)
+    assert errors == 0  # the profile does not count towards the diary's error counters
+
+
+def test_profile_auth_error_starts_reauth(mods):
+    async def scenario(coordinator):
+        await coordinator._async_update_data()  # noqa: SLF001
+        return coordinator
+
+    client = FakeClient(lambda day: _diary(mods, day), profile=mods.parser.FddbAuthError("session"))
+    run_entry = {}
+
+    async def wrapped(coordinator):
+        run_entry["entry"] = coordinator.config_entry
+        return await scenario(coordinator)
+
+    run(mods, client, wrapped)
+    assert run_entry["entry"].reauth_started == 1
+
+
+def test_profile_is_not_read_when_the_diary_fails(mods):
+    from homeassistant.helpers.update_coordinator import UpdateFailed
+
+    async def scenario(coordinator):
+        with pytest.raises(UpdateFailed):
+            await coordinator._async_update_data()  # noqa: SLF001
+
+    client = FakeClient(mods.parser.FddbConnectionError("down"), profile=_profile(mods))
+    run(mods, client, scenario)
+    assert client.profile_calls == 0
+
+
+def test_profile_is_stored_and_restored(mods):
+    store = FakeStore()
+
+    async def first(coordinator):
+        await coordinator._async_update_data()  # noqa: SLF001
+        return coordinator._data()  # noqa: SLF001
+
+    saved = run(
+        mods,
+        FakeClient(lambda day: _diary(mods, day), profile=_profile(mods, sports="no sports")),
+        first,
+        store=store,
+    )
+
+    async def second(coordinator):
+        return coordinator
+
+    restarted = run(mods, FakeClient(None), second, store=FakeStore(saved))
+    assert restarted.profile.sports == "no sports"
+    assert restarted.profile.height_cm == 172.0
+    assert restarted.profile_updated is not None
+    assert restarted._profile_next is None  # noqa: SLF001  (read again at the first poll)
+
+
+def test_poll_without_stored_profile_is_unknown(mods):
+    async def scenario(coordinator):
+        return coordinator.profile, coordinator.fddb_goal
+
+    assert run(mods, FakeClient(None), scenario) == (None, None)
 
 
 # --- diagnostics bookkeeping (#11) ---------------------------------------------------------

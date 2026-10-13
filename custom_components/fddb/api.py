@@ -12,6 +12,7 @@ from .const import (
     DIARY_URL,
     FDDB_TZ,
     LOGIN_URL,
+    PROFILE_URL,
     REQUEST_TIMEOUT,
     SESSION_COOKIE,
 )
@@ -20,7 +21,9 @@ from .parser import (
     FddbAuthError,
     FddbConnectionError,
     FddbError,
+    Profile,
     parse_diary,
+    parse_profile,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -82,7 +85,9 @@ class FddbClient:
 
     async def _get_diary_html(self, day: date) -> str:
         start, end = diary_window(day)
-        url = DIARY_URL.format(start=start, end=end)
+        return await self._get_html(DIARY_URL.format(start=start, end=end))
+
+    async def _get_html(self, url: str) -> str:
         try:
             async with self._session.get(
                 url,
@@ -112,6 +117,18 @@ class FddbClient:
                 _LOGGER.debug("FDDB session expired, logging in again")
                 await self.login()
                 return parse_diary(await self._get_diary_html(day), day)
+
+    async def fetch_profile(self) -> Profile:
+        """Fetch and parse the settings page, logging in (again) when needed."""
+        async with self._lock:
+            if self._cookie is None:
+                await self.login()
+            try:
+                return parse_profile(await self._get_html(PROFILE_URL))
+            except FddbAuthError:
+                _LOGGER.debug("FDDB session expired, logging in again")
+                await self.login()
+                return parse_profile(await self._get_html(PROFILE_URL))
 
     async def validate(self) -> None:
         """Log in and read today's page once (used by the config flow)."""

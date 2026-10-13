@@ -29,7 +29,7 @@ no public API. Everything is configured in the UI.
 - Macro shares of today's energy (protein, carbohydrates, fat)
 - Yesterday, this week (Monday to today), this month, 7-day and 30-day averages
 - Logging streak (consecutive days with at least one entry)
-- Daily calorie goal (from FDDB, or set by hand) with remaining calories and goal progress
+- Daily calorie goal (read from your FDDB profile, or set by hand) with remaining calories and goal progress
 - Problem sensor that tells you when FDDB could not be read
 - Actions to refresh on demand and to fetch the full diary (all products) of any day
 - English and German translations, diagnostics download with credentials redacted
@@ -58,7 +58,7 @@ in English with the German name in parentheses.
 | Average calories 7 days (Durchschnitt Kalorien 7 Tage) | sensor | kcal | Mean of the last 7 days before today, only days with entries |
 | Average calories 30 days (Durchschnitt Kalorien 30 Tage) | sensor | kcal | Same for 30 days |
 | Logging streak (Erfassungsserie) | sensor | d | Consecutive days with entries; today counts once it has entries |
-| Daily calorie goal (FDDB) (Tägliches Kalorienziel (FDDB)) | sensor | kcal | The goal read from your FDDB account; unknown while FDDB shows none (see [Daily calorie goal](#daily-calorie-goal)) |
+| Daily calorie goal (FDDB) (Tägliches Kalorienziel (FDDB)) | sensor | kcal | FDDB's *Required calories per day* from your settings page (see [Daily calorie goal](#daily-calorie-goal)); unknown until the profile was read |
 | Calories remaining (Verbleibende Kalorien) | sensor | kcal | Effective goal minus today; unknown while there is no goal |
 | Goal progress (Zielerreichung) | sensor | % | Today as percentage of the effective goal. Attribute `goal_source` is `manual` or `fddb` (`null` without a goal) |
 | Last update (Letzte Aktualisierung) | sensor (diagnostic) | | Time of the last successful read; kept across restarts |
@@ -117,16 +117,19 @@ If the password changes, Home Assistant asks you to sign in again (re-authentica
    (`goal_source: fddb`),
 3. otherwise both sensors are `unknown`.
 
-The FDDB goal is read from today's diary page on every poll; a page that does not show a goal
-keeps the last known value (also across restarts). Setting the number back to 0 switches to the
-FDDB goal again.
+The FDDB goal is the value of **Settings > Required calories per day** in your FDDB account (the
+"Required" row of the Personal Information table on <https://fddb.info/db/i18n/profile20/>). FDDB
+shows it in kJ and kcal; the integration uses the kcal figure and, if that is missing, converts the
+kJ value (kJ / 4.184).
 
-> [!NOTE]
-> **Reading the goal from FDDB is not active yet.** None of the diary pages the parser was
-> checked against shows a goal, so the place where FDDB displays it could not be confirmed and
-> the integration deliberately does not guess. Until that is confirmed, *Daily calorie goal
-> (FDDB)* stays `unknown` and only the number entity provides a goal (the override logic
-> itself is in place and tested). See issue #4.
+It comes from one extra request to the settings page
+(`https://fddb.info/db/i18n/profile20/?lang=en`), made when the integration is set up (also after
+re-authentication, which reloads it) and then **every 6 hours**, not on every poll, so a change in
+FDDB shows up after at most 6 hours (or after a reload). A failed read is retried after 1 hour,
+never turns *Problem* on and keeps the last value; the last value is also kept across restarts.
+Nothing else from that page is read.
+
+Setting the number entity back to 0 switches to the FDDB goal again.
 
 ## Actions
 
@@ -218,8 +221,8 @@ calculated in that time zone. The week starts on Monday. Yesterday is read once 
 - **This is web scraping.** FDDB has no public API, so the integration logs in and parses
   the diary page. It may stop working whenever fddb.info changes its pages. The *Problem*
   binary sensor turns on and the log shows the reason; please open an issue then.
-- The diary is requested in English because the parser relies on English labels
-  (for example "thereof Sugar"). Your FDDB account language is not changed.
+- The diary and the settings page are requested in English because the parser relies on
+  English labels (for example "thereof Sugar", "Required calories per day"). Your FDDB account language is not changed.
 - Please do not poll aggressively. The default of 30 minutes is plenty; the minimum is 10.
 - Values are whatever FDDB shows. Days you edit later are re-read only when they are
   today, yesterday (nightly) or fetched with `fddb.get_diary`.

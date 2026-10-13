@@ -26,13 +26,13 @@
   path, `null` for own foods and recipes). The attribute is excluded from the recorder, so it
   never counts against the 16 KB attribute limit and does not grow the database (#3).
 - Daily calorie goal from FDDB (#4). There is a new sensor *Daily calorie goal (FDDB)*
-  (`sensor.<user>_daily_calorie_goal_fddb`, kcal, state class `measurement`, no device class).
-  *Calories remaining* and *Goal progress* now use the **effective goal**: the number entity
-  *Daily calorie goal* when it is above 0, otherwise the FDDB goal; they are only `unknown`
-  when both are missing. *Goal progress* has the attribute `goal_source` (`manual` or `fddb`).
-  **Not active yet:** no saved FDDB page shows the goal, so the parser does not read it
-  (`parser.GOAL_LABEL` is `None`) until the real location is confirmed; the sensor stays
-  `unknown` and nothing changes for users who set the number entity.
+  (`sensor.<user>_daily_calorie_goal_fddb`, kcal, state class `measurement`, no device class)
+  with FDDB's *Required calories per day* from the settings page (the kcal figure, or kJ / 4.184
+  if kcal is missing). *Calories remaining* and *Goal progress* now use the **effective goal**:
+  the number entity *Daily calorie goal* when it is above 0, otherwise the FDDB goal; they are
+  only `unknown` when both are missing. *Goal progress* has the attribute `goal_source`
+  (`manual` or `fddb`). The settings page costs one extra request at setup and then every 6
+  hours (a failed read is retried after 1 hour and never fails the regular update).
 
 - Diagnostic sensors (category *diagnostic*) for the update itself (#11):
   *Last fetch duration* (`fetch_duration`, s, device class *duration*, measurement, 2 decimals),

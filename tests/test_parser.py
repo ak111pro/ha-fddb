@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from datetime import date
-import re
 
 import pytest
 
@@ -12,7 +11,9 @@ from custom_components.fddb.parser import (
     DiaryDay,
     FddbAuthError,
     FddbParseError,
+    Profile,
     parse_diary,
+    parse_profile,
 )
 
 DAY = date(2026, 10, 7)
@@ -214,48 +215,132 @@ def test_totals_are_found_by_label_not_by_position(normal_html):
     assert diary.fibre == 6.2
 
 
-# --- daily calorie goal (#4) ---------------------------------------------------------------
-# ASSUMPTION: no saved FDDB page contains a goal, so the markup below is INVENTED. It only tests
-# the reading logic (label lookup in a two-cell row, positive values only); the real label and
-# position still have to be confirmed against a real page, see parser.GOAL_LABEL.
-
-ASSUMED_GOAL_LABEL = re.compile(r"daily\s+goal", re.IGNORECASE)  # ASSUMPTION, invented label
+def test_diary_page_has_no_goal_and_the_action_response_is_unchanged(normal):
+    assert not hasattr(normal, "calorie_goal")
+    assert "calorie_goal" not in normal.as_dict()
 
 
-def _with_assumed_goal_row(html: str, value: str) -> str:
-    row = f"<tr><td>Daily goal</td><td><span>{value}</span></td></tr>"
-    return html.replace(
-        '<div class="nutrients">\n  <table>', f'<div class="nutrients">\n  <table>{row}'
+# --- profile / settings page (#4, #10) -----------------------------------------------------
+# profile_en.html has the structure of the real English settings page; all values are invented.
+
+
+@pytest.fixture
+def profile_html(load_fixture) -> str:
+    return load_fixture("profile_en.html")
+
+
+@pytest.fixture
+def profile(profile_html) -> Profile:
+    return parse_profile(profile_html)
+
+
+def test_profile_values(profile):
+    assert profile.as_dict() == {
+        "height_cm": 172.0,
+        "weight_kg": 64.5,
+        "bmi": 22.0,
+        "bmi_category": "Normal",
+        "occupation": "easy - Example: Student, ...",
+        "sports": "no sports",
+        "goal": "Not specified",
+        "activity_index": 60.0,
+        "calorie_goal": 2000.0,
+    }
+
+
+def test_profile_has_no_personal_fields(profile):
+    # name, user name, birthday, gender, country and e-mail settings are never read
+    assert set(profile.as_dict()) == {
+        "height_cm",
+        "weight_kg",
+        "bmi",
+        "bmi_category",
+        "occupation",
+        "sports",
+        "goal",
+        "activity_index",
+        "calorie_goal",
+    }
+    assert "Max" not in repr(profile)
+    assert "testuser" not in repr(profile)
+
+
+def test_required_calories_prefer_kcal_over_kilojoules(profile_html):
+    # kJ and kcal disagree on purpose: the kcal figure wins
+    html = profile_html.replace("8368 kJ", "9999 kJ")
+    assert parse_profile(html).calorie_goal == 2000.0
+
+
+def test_required_calories_fall_back_to_kilojoules(profile_html):
+    html = profile_html.replace("&nbsp;<span>(2000 kcal)</span>", "")
+    assert parse_profile(html).calorie_goal == 2000.0  # 8368 kJ / 4.184
+
+
+def test_required_calories_with_kcal_first_and_thousands_separator(profile_html):
+    html = profile_html.replace(
+        "<b>8368 kJ</b>&nbsp;<span>(2000 kcal)</span>",
+        "<b>2,000 kcal</b>&nbsp;<span>(8368 kJ)</span>",
     )
+    assert parse_profile(html).calorie_goal == 2000.0
 
 
-def test_goal_is_not_read_while_the_real_label_is_unknown(normal_html):
-    assert parser_module.GOAL_LABEL is None
-    assert parse_diary(_with_assumed_goal_row(normal_html, "2,400 kcal"), DAY).calorie_goal is None
+@pytest.mark.parametrize("value", ["0 kcal", "no value", ""])
+def test_zero_or_unreadable_required_calories_mean_no_goal(profile_html, value):
+    html = profile_html.replace("<b>8368 kJ</b>&nbsp;<span>(2000 kcal)</span>", f"<b>{value}</b>")
+    assert parse_profile(html).calorie_goal is None
 
 
-def test_goal_row_is_read_when_a_label_is_given(normal_html):
-    html = _with_assumed_goal_row(normal_html, "2,400 kcal")
-    assert parse_diary(html, DAY, ASSUMED_GOAL_LABEL).calorie_goal == 2400.0
+def test_rows_are_found_by_label_not_by_position(profile_html):
+    # swap the "Required" and "Activity" rows
+    rows = profile_html.split("\n")
+    i = next(n for n, line in enumerate(rows) if "<b>Required</b>" in line)
+    rows[i], rows[i + 1] = rows[i + 1], rows[i]
+    profile = parse_profile("\n".join(rows))
+    assert profile.calorie_goal == 2000.0
+    assert profile.activity_index == 60.0
 
 
-@pytest.mark.parametrize("value", ["0 kcal", "n/a", ""])
-def test_zero_or_unreadable_goal_means_no_goal(normal_html, value):
-    html = _with_assumed_goal_row(normal_html, value)
-    assert parse_diary(html, DAY, ASSUMED_GOAL_LABEL).calorie_goal is None
+def test_missing_label_gives_none_and_a_debug_log(profile_html, caplog):
+    html = profile_html.replace("Sports:", "Fitness:")
+    with caplog.at_level("DEBUG", logger=parser_module.__name__):
+        profile = parse_profile(html)
+    assert profile.sports is None
+    assert profile.height_cm == 172.0
+    assert "sports" in caplog.text
 
 
-def test_missing_goal_row_means_no_goal(normal_html):
-    assert parse_diary(normal_html, DAY, ASSUMED_GOAL_LABEL).calorie_goal is None
+def test_changed_value_formats_do_not_crash(profile_html):
+    html = profile_html.replace("<b>172 cm</b>", "<b>unknown</b>").replace("<b>60%</b>", "<b></b>")
+    profile = parse_profile(html)
+    assert profile.height_cm is None
+    assert profile.activity_index is None
+    assert profile.weight_kg == 64.5
 
 
-def test_goal_is_read_on_a_day_without_entries(load_fixture):
-    html = load_fixture("diary_empty.html").replace(
-        "</body>", "<table><tr><td>Daily goal</td><td>2000 kcal</td></tr></table></body>"
-    )
-    assert parse_diary(html, DAY, ASSUMED_GOAL_LABEL).calorie_goal == 2000.0
+def test_bmi_without_category_line(profile_html):
+    html = profile_html.replace('<span style="color:#22AA22;">Normal</span><br>', "")
+    profile = parse_profile(html)
+    assert profile.bmi == 22.0
+    assert profile.bmi_category is None
 
 
-def test_goal_does_not_change_the_action_response(normal_html):
-    html = _with_assumed_goal_row(normal_html, "2,400 kcal")
-    assert "calorie_goal" not in parse_diary(html, DAY, ASSUMED_GOAL_LABEL).as_dict()
+def test_decimal_comma_weight(profile_html):
+    assert parse_profile(profile_html.replace("64.5 kg", "64,5 kg")).weight_kg == 64.5
+
+
+def test_profile_page_while_logged_out(load_fixture):
+    with pytest.raises(FddbAuthError):
+        parse_profile(load_fixture("diary_logged_out.html"))
+
+
+@pytest.mark.parametrize("html", ["", "<html><body><p>Maintenance</p></body></html>"])
+def test_page_without_any_profile_label_is_a_parse_error(html):
+    with pytest.raises(FddbParseError):
+        parse_profile(html)
+
+
+def test_profile_round_trip_and_damaged_store(profile):
+    assert Profile.from_dict(profile.as_dict()) == profile
+    damaged = Profile.from_dict({"height_cm": "tall", "sports": 5, "weight_kg": True, "x": 1})
+    assert damaged == Profile()
+    assert Profile.from_dict(None) == Profile()
