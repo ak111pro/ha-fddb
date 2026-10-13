@@ -21,6 +21,12 @@
 
 ### Added
 
+- Meal and time per product (#16): every entry of the `products` attribute of *Calories today*
+  (and of the `products` of the `get_diary` response) has two new keys, `meal` and `time`.
+  `meal` is the group the entry is listed under on an account with *Grouping: By meals*
+  ("Dinner" from the group row "Dinner: 2 products"); `time` is the time of day as `HH:MM` from
+  the hidden time shown next to each entry. Both are `null` when the account does not group its
+  diary or the page shows no time.
 - Daily goal from the diary page (#15). The diary page shows the required energy of every day
   ("Required energy: 8368 kJ (2000 kcal) Required calories per day"); it is now read with every
   diary request and used as FDDB's goal for that day, stored with each day of the history and

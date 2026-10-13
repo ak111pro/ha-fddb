@@ -79,7 +79,18 @@ def test_calories_sensor_exposes_products(sensor_module, load_fixture):
     sensor = _make_sensor(sensor_module, "calories", load_fixture)
     products = sensor.extra_state_attributes["products"]
     assert [p["name"] for p in products][0] == "Oatmeal"
-    assert set(products[0]) == {"name", "amount", "calories", "fat", "carbs", "protein", "link"}
+    assert set(products[0]) == {
+        "name",
+        "amount",
+        "calories",
+        "fat",
+        "carbs",
+        "protein",
+        "link",
+        "meal",
+        "time",
+    }
+    assert (products[0]["meal"], products[0]["time"]) == ("Breakfast", "08:15")
 
 
 def test_products_attribute_is_not_recorded(sensor_module):

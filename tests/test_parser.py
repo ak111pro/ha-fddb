@@ -168,6 +168,7 @@ def test_as_dict(normal):
         "protein": 5.1,
         "link": "/db/en/food/test/oatmeal/index.html",
         "time": "08:15",
+        "meal": "Breakfast",
     }
     assert data["products"][3]["amount"] is None
     assert data["products"][3]["time"] is None
@@ -194,7 +195,7 @@ def test_amount_split_only_when_text_starts_with_a_quantity():
 
 def test_unexpected_failure_inside_the_parser_becomes_a_parse_error(normal_html, monkeypatch):
     # fddb-exporter 2.5.0: never let an unchecked failure escape, report it as a parse error.
-    def boom(_cells):
+    def boom(*_args):
         raise AttributeError("layout changed")
 
     monkeypatch.setattr(parser_module, "_parse_product", boom)
@@ -617,3 +618,76 @@ def test_goal_does_not_depend_on_the_balance_block(meals_html):
 
 def test_goal_is_in_the_get_diary_data(meals_html):
     assert parse_diary(meals_html, DAY).as_dict()["goal"] == 1800.0
+
+
+# --- meal and time per product (#16) ---------------------------------------------------------
+
+
+def test_every_product_knows_its_meal_and_time(meals_html):
+    products = parse_diary(meals_html, DAY).products
+    assert [(p.meal, p.time) for p in products] == [
+        ("Snack 3", "22:05"),
+        ("Dinner", "19:30"),
+        ("Dinner", "19:30"),
+        ("Breakfast", "07:45"),
+        ("Breakfast", "07:45"),
+    ]
+    assert [p.name for p in products][:2] == ["Example Chocolate", "Example Lasagne"]
+
+
+def test_group_rows_with_the_product_count_are_still_no_products(meals_html):
+    names = [p.name for p in parse_diary(meals_html, DAY).products]
+    assert len(names) == 5
+    assert not any("products" in name or "product:" in name for name in names)
+
+
+def test_meal_of_a_group_row_without_a_count(normal):
+    # diary_normal.html has plain group labels ("Breakfast", "Lunch") without ": n products"
+    assert [p.meal for p in normal.products] == ["Breakfast", "Breakfast", "Lunch", "Lunch"]
+
+
+def test_ungrouped_account_has_no_meal(meals_html):
+    start = meals_html.index('<tr><td class="myday-table-std-td"><span class="stext"')
+    rows = meals_html[start : meals_html.index('<tr><td class="myday-table-std-td-footer"')]
+    html = meals_html.replace(
+        rows, "".join(r for r in rows.splitlines(True) if "mydayshowtime" in r)
+    )
+    products = parse_diary(html, DAY).products
+    assert len(products) == 5
+    assert {p.meal for p in products} == {None}
+    assert products[0].time == "22:05"
+
+
+def test_time_is_null_when_the_page_shows_none(meals_html):
+    html = meals_html.replace("22:05&nbsp;", "").replace("19:30&nbsp;", "no time")
+    products = parse_diary(html, DAY).products
+    assert [p.time for p in products] == [None, None, None, "07:45", "07:45"]
+    assert products[0].meal == "Snack 3"
+
+
+def test_time_without_a_leading_zero_is_padded(meals_html):
+    assert (
+        parse_diary(meals_html.replace("07:45&nbsp;", "7:45&nbsp;"), DAY).products[3].time
+        == "07:45"
+    )
+
+
+def test_product_without_link_keeps_meal_and_time(meals_html):
+    html = meals_html.replace(
+        '<a href="https://fddb.info/db/en/food/dc/milk/index.html">300 ml Example Milk 1.5%</a>',
+        "300 ml Example Milk 1.5%",
+    )
+    milk = parse_diary(html, DAY).products[4]
+    assert (milk.name, milk.link, milk.meal, milk.time) == (
+        "Example Milk 1.5%",
+        None,
+        "Breakfast",
+        "07:45",
+    )
+
+
+def test_as_attribute_has_meal_and_time(meals_html):
+    entry = parse_diary(meals_html, DAY).product_attributes()[1]
+    assert entry["meal"] == "Dinner"
+    assert entry["time"] == "19:30"
+    assert list(entry)[-2:] == ["meal", "time"]

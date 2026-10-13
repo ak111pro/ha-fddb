@@ -8,7 +8,7 @@ import json
 from conftest import parser
 
 DAY = date(2026, 10, 7)
-KEYS = ["name", "amount", "calories", "fat", "carbs", "protein", "link"]
+KEYS = ["name", "amount", "calories", "fat", "carbs", "protein", "link", "meal", "time"]
 
 
 def _parse(load_fixture, name="diary_normal.html"):
@@ -27,6 +27,8 @@ def test_attribute_has_the_documented_keys_and_values(load_fixture):
         "carbs": 246.2,
         "protein": 5.1,
         "link": "/db/en/food/test/oatmeal/index.html",
+        "meal": "Breakfast",
+        "time": "08:15",
     }
 
 
@@ -50,7 +52,20 @@ def test_own_food_has_no_link_and_stays_in_the_list(load_fixture):
             "carbs": coffee[0]["carbs"],
             "protein": coffee[0]["protein"],
             "link": None,
+            "meal": "Lunch",
+            "time": None,
         }
+    ]
+
+
+def test_meal_and_time_come_from_the_group_row_and_the_time_span(load_fixture):
+    products = _parse(load_fixture, "diary_meals.html").product_attributes()
+    assert [(p["meal"], p["time"]) for p in products] == [
+        ("Snack 3", "22:05"),
+        ("Dinner", "19:30"),
+        ("Dinner", "19:30"),
+        ("Breakfast", "07:45"),
+        ("Breakfast", "07:45"),
     ]
 
 

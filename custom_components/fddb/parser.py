@@ -43,10 +43,13 @@ class Product:
     carbs: float
     protein: float
     link: str | None
+    # Time of day as "HH:MM" and the meal group ("Dinner") the entry is listed under; None when
+    # the page shows no time or the account does not group its diary by meals.
     time: str | None = None
+    meal: str | None = None
 
     def as_attribute(self) -> dict[str, str | float | None]:
-        """Compact form used for the ``products`` state attribute (no time of day)."""
+        """Compact form used for the ``products`` state attribute."""
         return {
             "name": self.name,
             "amount": self.amount,
@@ -55,6 +58,8 @@ class Product:
             "carbs": self.carbs,
             "protein": self.protein,
             "link": self.link,
+            "meal": self.meal,
+            "time": self.time,
         }
 
 
@@ -303,7 +308,26 @@ def _is_category_row(cells: list[Tag]) -> bool:
     return False
 
 
-def _parse_product(cells: list[Tag]) -> Product:
+_GROUP_LABEL = re.compile(r"^(.*?)\s*:\s*\d+\s+products?$", re.IGNORECASE)
+_TIME = re.compile(r"^(\d{1,2}):(\d{2})(?::\d{2})?$")
+
+
+def _group_name(cell: Tag) -> str | None:
+    """The meal of a group row: "Dinner" from "Dinner: 2 products" (or "Dinner" alone)."""
+    text = " ".join(cell.get_text(" ", strip=True).split())
+    match = _GROUP_LABEL.match(text)
+    return ((match.group(1) if match else text).strip()) or None
+
+
+def _time_of_day(span: Tag | None) -> str | None:
+    """"HH:MM" from the (hidden) time span of a product row, None if there is none."""
+    if span is None:
+        return None
+    match = _TIME.match(" ".join(span.get_text(" ", strip=True).split()))
+    return f"{int(match.group(1)):02d}:{match.group(2)}" if match else None
+
+
+def _parse_product(cells: list[Tag], meal: str | None = None) -> Product:
     first = cells[0]
     time_span = first.select_one("span.mydayshowtime")
     link = first.find("a")
@@ -328,7 +352,8 @@ def _parse_product(cells: list[Tag]) -> Product:
         carbs=_cell_value(cells[4]),
         protein=_cell_value(cells[5]),
         link=link.get("href") if link is not None else None,
-        time=time_span.get_text(strip=True) if time_span else None,
+        time=_time_of_day(time_span),
+        meal=meal,
     )
 
 
@@ -377,11 +402,15 @@ def _parse_diary(html: str, day: date) -> DiaryDay:
         raise FddbParseError("Unexpected totals row")
 
     products = []
+    meal: str | None = None  # the group the following product rows belong to
     for row in product_rows:
         cells = row.find_all("td", recursive=False)
-        if len(cells) < 6 or _is_category_row(cells):
+        if len(cells) < 6:
             continue
-        products.append(_parse_product(cells))
+        if _is_category_row(cells):
+            meal = _group_name(cells[0])
+            continue
+        products.append(_parse_product(cells, meal))
 
     carbs = _cell_value(footer_cells[4])
     nutrients = _nutrients(soup)
