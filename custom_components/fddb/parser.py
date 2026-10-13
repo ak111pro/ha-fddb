@@ -70,10 +70,20 @@ class DiaryDay:
     protein: float = 0.0
     fibre: float = 0.0
     products: list[Product] = field(default_factory=list)
+    # Further per-day values of the diary page by key (see ``NUTRIENTS`` and ``bread_units``),
+    # in the unit of that key. A key is missing when the page does not show the value.
+    nutrients: dict[str, float] = field(default_factory=dict)
 
     @property
     def has_entries(self) -> bool:
         return bool(self.products) or self.calories > 0
+
+    def nutrient(self, key: str) -> float | None:
+        """A value from ``nutrients``; 0 on a day without entries, None if the page lacks it."""
+        value = self.nutrients.get(key)
+        if value is None and not self.has_entries:
+            return 0.0
+        return value
 
     def product_attributes(self) -> list[dict[str, str | float | None]]:
         """The diary entries for the ``products`` attribute of the daily summary sensor."""
@@ -103,6 +113,33 @@ _SUGAR = re.compile(r"thereof\s+sugar", re.IGNORECASE)
 _FIBRE = re.compile(r"dietary\s+fib(re|er)", re.IGNORECASE)
 _LOGIN_TEXTS = {"login", "anmelden"}
 
+# Per-day values of the nutrient tables below the diary (the summary table, "Vitamins" and
+# "Minerals"), found by their English label: key -> (label, unit the value is converted to).
+# FDDB switches the unit with the size of a value (Vitamin D as "2.5 μg" one day and as
+# "0.0326 mg" the next), so every value is read with its own unit and converted.
+NUTRIENTS: dict[str, tuple[str, str]] = {
+    "alcohol": ("Alcohol", "g"),
+    "cholesterol": ("Cholesterol", "mg"),
+    "salt": ("Salt", "g"),
+}
+_LABEL_TO_NUTRIENT = {label.lower(): (key, unit) for key, (label, unit) in NUTRIENTS.items()}
+
+# Bread units (BE) follow from the carbohydrates: FDDB shows 1 BE per 12 g.
+GRAMS_PER_BREAD_UNIT = 12.0
+_BREAD_UNITS = re.compile(r"\(\s*([\d.,]+)\s*BE\s*\)", re.IGNORECASE)
+_VALUE_WITH_UNIT = re.compile(r"^\s*(\d[\d,]*(?:\.\d+)?|\.\d+)\s*([^\d\s(.,][^\s(]*)?")
+# Factors to the smallest unit of each family (micrograms, millilitres). FDDB writes the Greek
+# letter "μ", normalised to the micro sign "µ" before the lookup.
+_MASS_UNITS = {"µg": 1.0, "ug": 1.0, "mcg": 1.0, "mg": 1_000.0, "g": 1_000_000.0}
+_VOLUME_UNITS = {
+    "ml": 1.0,
+    "l": 1_000.0,
+    "litre": 1_000.0,
+    "litres": 1_000.0,
+    "liter": 1_000.0,
+    "liters": 1_000.0,
+}
+
 
 def _number(text: str) -> float:
     cleaned = _NUMBER.sub("", text)
@@ -118,6 +155,56 @@ def _cell_value(cell: Tag) -> float:
     # Carbs cells can carry bread units in a second tag, e.g. "246.2 g (20.5 BE)".
     first = cell.find(["span", "b"])
     return _number((first or cell).get_text(" ", strip=True))
+
+
+def _convert(text: str, target: str) -> float | None:
+    """The number in ``text`` ("2.5 μg", "0.1 litres") in ``target`` ("µg", "mg", "g", "l").
+
+    None if there is no number or the unit is missing, unknown or of another kind (mass versus
+    volume), so a changed page never produces a wrong value.
+    """
+    match = _VALUE_WITH_UNIT.match(text)
+    if match is None or match.group(2) is None:
+        return None
+    unit = match.group(2).lower().replace("μ", "µ")
+    family = _VOLUME_UNITS if target == "l" else _MASS_UNITS
+    if unit not in family:
+        return None
+    try:
+        value = float(match.group(1).replace(",", ""))
+    except ValueError:
+        return None
+    return round(value * family[unit] / family[target], 6)
+
+
+def _nutrients(soup: BeautifulSoup) -> dict[str, float]:
+    """The values of ``NUTRIENTS`` that the page shows, by label (first match per key)."""
+    found: dict[str, float] = {}
+    for row in soup.select("table:not(.myday-table-std) tr"):
+        cells = row.find_all("td", recursive=False)
+        if len(cells) < 2:
+            continue
+        label = _LABEL_TO_NUTRIENT.get(" ".join(cells[0].get_text(" ", strip=True).lower().split()))
+        if label is None or label[0] in found:
+            continue
+        key, unit = label
+        value = _convert(cells[1].get_text(" ", strip=True), unit)
+        if value is None:
+            _LOGGER.debug("Diary value %r missing or not readable", key)
+            continue
+        found[key] = value
+    return found
+
+
+def _bread_units(carbs_cell: Tag, carbs: float) -> float:
+    """Bread units of the day: as shown next to the carbohydrate total, else carbs / 12 g."""
+    match = _BREAD_UNITS.search(carbs_cell.get_text(" ", strip=True))
+    if match is not None:
+        try:
+            return float(match.group(1).replace(",", ""))
+        except ValueError:
+            pass
+    return round(carbs / GRAMS_PER_BREAD_UNIT, 1)
 
 
 def is_logged_out(soup: BeautifulSoup) -> bool:
@@ -213,15 +300,19 @@ def _parse_diary(html: str, day: date) -> DiaryDay:
             continue
         products.append(_parse_product(cells))
 
+    carbs = _cell_value(footer_cells[4])
+    nutrients = _nutrients(soup)
+    nutrients["bread_units"] = _bread_units(footer_cells[4], carbs)
     return DiaryDay(
         day=day,
         calories=_cell_value(footer_cells[2]),
         fat=_cell_value(footer_cells[3]),
-        carbs=_cell_value(footer_cells[4]),
+        carbs=carbs,
         protein=_cell_value(footer_cells[5]),
         sugar=_labelled_value(soup, _SUGAR),
         fibre=_labelled_value(soup, _FIBRE),
         products=products,
+        nutrients=nutrients,
     )
 
 

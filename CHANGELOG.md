@@ -21,6 +21,16 @@
 
 ### Added
 
+- Further daily macronutrients from the diary page (#8): *Alcohol today* (`alcohol`, g),
+  *Bread units today* (`bread_units`, BE, no device class), *Salt today* (`salt`, g, from the
+  "Minerals" table) and *Cholesterol today* (`cholesterol`, mg, disabled by default). Same
+  pattern as the other daily totals: state class `total`, `last_reset` at midnight German time,
+  device class *weight* (not for BE). Alcohol, bread units and salt are enabled by default. The
+  values are found by their label; a row a page does not show makes the sensor `unknown`, a day
+  without entries gives `0`. Bread units are read from the "(x BE)" next to the carbohydrate
+  total, or calculated as carbohydrates / 12 g if the page does not show them. The `get_diary`
+  response has a new key `nutrients` with these values. FDDB does not show saturated fat or
+  polyols (sugar alcohols) per day, so there are no sensors for them.
 - The *Calories today* sensor has a `products` attribute with today's diary entries
   (`name`, `amount`, `calories`, `fat`, `carbs`, `protein`, `link`; `link` is the relative FDDB
   path, `null` for own foods and recipes). The attribute is excluded from the recorder, so it

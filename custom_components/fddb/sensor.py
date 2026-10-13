@@ -65,6 +65,30 @@ def _grams(key: str) -> FddbSensorDescription:
     )
 
 
+def _nutrient(
+    key: str,
+    unit: str | None = UnitOfMass.GRAMS,
+    *,
+    precision: int = 1,
+    device_class: SensorDeviceClass | None = SensorDeviceClass.WEIGHT,
+    enabled: bool = True,
+) -> FddbSensorDescription:
+    """A per-day value that only some diary pages show (alcohol, salt, vitamins, ...).
+
+    Same state class pattern as the macros. ``unit`` is the unit the parser converts to.
+    """
+    return FddbSensorDescription(
+        key=key,
+        device_class=device_class,
+        native_unit_of_measurement=unit,
+        state_class=SensorStateClass.TOTAL,
+        last_reset_fn=day_start,
+        suggested_display_precision=precision,
+        entity_registry_enabled_default=enabled,
+        value_fn=lambda data, _c, key=key: data.today.nutrient(key),
+    )
+
+
 def _kcal_total(
     key: str,
     value_fn: Callable[[FddbData, FddbCoordinator], float | None],
@@ -136,6 +160,12 @@ SENSORS: tuple[FddbSensorDescription, ...] = (
     _grams("sugar"),
     _grams("protein"),
     _grams("fibre"),
+    # --- further values of the diary page. The useful ones are on by default ----------------
+    _nutrient("alcohol"),
+    # Bread units have no device class; FDDB shows 1 BE per 12 g of carbohydrates.
+    _nutrient("bread_units", "BE", device_class=None),
+    _nutrient("cholesterol", UnitOfMass.MILLIGRAMS, enabled=False),
+    _nutrient("salt", precision=2),
     FddbSensorDescription(
         key="products",
         state_class=SensorStateClass.TOTAL,

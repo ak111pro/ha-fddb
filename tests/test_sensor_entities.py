@@ -26,9 +26,17 @@ def sensor_module(fddb_ha):
 DAY = date(2026, 10, 7)
 
 
-def _make_sensor(sensor_module, key, load_fixture, goal=None, fddb_goal=None, profile="default"):
+def _make_sensor(
+    sensor_module,
+    key,
+    load_fixture,
+    goal=None,
+    fddb_goal=None,
+    profile="default",
+    diary="diary_full.html",
+):
     parser = sys.modules["fddb_under_test.parser"]
-    today = parser.parse_diary(load_fixture("diary_normal.html"), DAY)
+    today = parser.parse_diary(load_fixture(diary), DAY)
     data = SimpleNamespace(
         today=today,
         yesterday_calories=1800.0,
@@ -105,6 +113,10 @@ EXPECTED = {
     "sugar": ("weight", "total", "g", "day", 1),
     "protein": ("weight", "total", "g", "day", 1),
     "fibre": ("weight", "total", "g", "day", 1),
+    "alcohol": ("weight", "total", "g", "day", 1),
+    "bread_units": (None, "total", "BE", "day", 1),
+    "cholesterol": ("weight", "total", "mg", "day", 1),
+    "salt": ("weight", "total", "g", "day", 2),
     "products": (None, "total", None, "day", 0),
     "protein_share": (None, "measurement", "%", None, 0),
     "carbs_share": (None, "measurement", "%", None, 0),
@@ -295,3 +307,35 @@ def test_no_sensor_for_personal_profile_details(sensor_module):
     keys = {d.key for d in sensor_module.SENSORS}
     for personal in ("gender", "birthday", "first_name", "name", "username", "country", "email"):
         assert not any(personal in key for key in keys), personal
+
+
+# --- further macronutrients (#8) -------------------------------------------------------------
+
+# Switched on by default: the commonly useful ones. The rest has to be enabled by hand.
+DISABLED_BY_DEFAULT = {"cholesterol"}
+
+
+def test_default_enabled_state_of_the_further_macros(sensor_module):
+    for key in ("alcohol", "bread_units", "cholesterol", "salt"):
+        description = next(d for d in sensor_module.SENSORS if d.key == key)
+        assert description.entity_registry_enabled_default == (key not in DISABLED_BY_DEFAULT), key
+
+
+def test_further_macro_values(sensor_module, load_fixture):
+    def value(key, diary="diary_full.html"):
+        return _make_sensor(sensor_module, key, load_fixture, diary=diary).native_value
+
+    assert value("alcohol") == 2.5
+    assert value("bread_units") == 22.5
+    assert value("cholesterol") == 45
+    assert value("salt") == 3.2154
+    # A page that does not show a row: unknown, not 0
+    assert value("alcohol", "diary_normal.html") is None
+    assert value("bread_units", "diary_normal.html") == 22.5
+
+
+@pytest.mark.parametrize("key", ["alcohol", "bread_units", "cholesterol", "salt"])
+def test_further_macros_report_zero_on_an_empty_day(sensor_module, load_fixture, key):
+    sensor = _make_sensor(sensor_module, key, load_fixture)
+    sensor.coordinator.data.today = sys.modules["fddb_under_test.parser"].DiaryDay(day=DAY)
+    assert sensor.native_value == 0.0

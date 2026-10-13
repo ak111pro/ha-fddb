@@ -60,6 +60,18 @@
       "fibre": {
         "name": "Ballaststoffe heute"
       },
+      "alcohol": {
+        "name": "Alkohol heute"
+      },
+      "bread_units": {
+        "name": "Broteinheiten heute"
+      },
+      "cholesterol": {
+        "name": "Cholesterin heute"
+      },
+      "salt": {
+        "name": "Salz heute"
+      },
       "products": {
         "name": "Produkte heute"
       },

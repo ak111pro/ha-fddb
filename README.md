@@ -26,6 +26,7 @@ no public API. Everything is configured in the UI.
 ## Features
 
 - Today's calories, fat, carbohydrates, sugar, protein, fibre and number of products
+- Further values of the diary page: alcohol, bread units (BE), salt and cholesterol
 - Macro shares of today's energy (protein, carbohydrates, fat)
 - Yesterday, this week (Monday to today), this month, 7-day and 30-day averages
 - Logging streak (consecutive days with at least one entry)
@@ -49,6 +50,10 @@ in English with the German name in parentheses.
 | Sugar today (Zucker heute) | sensor | g | Part of the carbohydrates |
 | Protein today (Eiweiß heute) | sensor | g | |
 | Fibre today (Ballaststoffe heute) | sensor | g | |
+| Alcohol today (Alkohol heute) | sensor | g | |
+| Bread units today (Broteinheiten heute) | sensor | BE | As shown next to the carbohydrate total of the diary, otherwise carbohydrates / 12 g |
+| Cholesterol today (Cholesterin heute) | sensor | mg | Disabled by default |
+| Salt today (Salz heute) | sensor | g | From the *Minerals* table of the diary |
 | Products today (Produkte heute) | sensor | | Number of diary entries |
 | Protein share (Eiweißanteil) | sensor | % | Share of energy (protein 4, carbs 4, fat 9 kcal/g) |
 | Carbohydrate share (Kohlenhydratanteil) | sensor | % | |
@@ -84,6 +89,12 @@ or memory use cannot be measured, because all integrations share the Home Assist
 
 The profile sensors are read from your FDDB settings page (see [Profile](#profile)), so they
 are `unknown` until it was read once and `unknown` for a value your profile does not contain.
+
+FDDB does not show saturated fat or sugar alcohols (polyols) per day, so there are no sensors for
+them. The values of the diary page that are not part of every page (alcohol, salt, cholesterol)
+are `unknown` when a page does not list them, and `0` on a day without entries. Sensors that
+are disabled by default can be enabled under the device's entities (*Settings > Devices &
+services > FDDB*).
 
 Daily values (calories, macros, number of products) use state class `total` with
 `last_reset` at midnight German time; weekly and monthly calories reset on Monday and on the
@@ -184,6 +195,11 @@ carbs: 210.5
 sugar: 48.0
 protein: 95.0
 fibre: 24.0
+nutrients:  # further values of the page, in g, mg or µg; keys the page does not show are missing
+  alcohol: 0.0
+  cholesterol: 179.0
+  salt: 7.5809
+  bread_units: 22.6
 products:
   - name: Oatmeal
     amount: 150 g

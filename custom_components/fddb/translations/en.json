@@ -60,6 +60,18 @@
       "fibre": {
         "name": "Fibre today"
       },
+      "alcohol": {
+        "name": "Alcohol today"
+      },
+      "bread_units": {
+        "name": "Bread units today"
+      },
+      "cholesterol": {
+        "name": "Cholesterol today"
+      },
+      "salt": {
+        "name": "Salt today"
+      },
       "products": {
         "name": "Products today"
       },
