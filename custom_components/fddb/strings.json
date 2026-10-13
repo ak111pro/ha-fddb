@@ -101,6 +101,18 @@
       },
       "last_update": {
         "name": "Last update"
+      },
+      "fetch_duration": {
+        "name": "Last fetch duration"
+      },
+      "consecutive_errors": {
+        "name": "Consecutive fetch errors"
+      },
+      "total_errors": {
+        "name": "Fetch errors total"
+      },
+      "storage_size": {
+        "name": "Storage size"
       }
     },
     "number": {

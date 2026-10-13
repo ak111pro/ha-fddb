@@ -34,6 +34,16 @@
   (`parser.GOAL_LABEL` is `None`) until the real location is confirmed; the sensor stays
   `unknown` and nothing changes for users who set the number entity.
 
+- Diagnostic sensors (category *diagnostic*) for the update itself (#11):
+  *Last fetch duration* (`fetch_duration`, s, device class *duration*, measurement, 2 decimals),
+  *Consecutive fetch errors* (`consecutive_errors`, with the attributes `last_error` and
+  `last_error_time`, not recorded), *Fetch errors total* (`total_errors`, state class
+  `total_increasing`) and *Storage size* (`storage_size`, bytes shown as kB, device class
+  *data size*). *Last update* now means "last successful read of today's diary" (it no longer
+  moves when only yesterday is re-read at night), and together with the error totals it is
+  stored and restored across restarts. The diagnostic sensors stay available while an update
+  fails.
+
 ### Changed
 
 - Device classes, state classes and display precision for all sensors (#12):

@@ -4,8 +4,10 @@ from __future__ import annotations
 
 import asyncio
 from dataclasses import dataclass
-from datetime import date, datetime, timedelta
+from datetime import date, datetime, timedelta, timezone
 import logging
+import os
+from time import monotonic
 from typing import Any
 
 from homeassistant.config_entries import ConfigEntry
@@ -38,6 +40,17 @@ def fddb_today() -> date:
     return datetime.now(FDDB_TZ).date()
 
 
+def _format_time(value: datetime | None) -> str | None:
+    return value.isoformat() if value else None
+
+
+def _parse_time(value: str | None) -> datetime | None:
+    try:
+        return datetime.fromisoformat(value) if value else None
+    except ValueError:
+        return None
+
+
 @dataclass(slots=True)
 class FddbData:
     """Everything the entities need."""
@@ -49,7 +62,6 @@ class FddbData:
     avg_7_days: float | None
     avg_30_days: float | None
     streak: int
-    last_update: datetime
 
 
 class FddbCoordinator(DataUpdateCoordinator[FddbData]):
@@ -78,6 +90,16 @@ class FddbCoordinator(DataUpdateCoordinator[FddbData]):
         self.fddb_goal: float | None = None
         self._backfilled = False
         self._unsub_finalize = None
+        # Diagnostics (bookkeeping of the regular poll only, not of background jobs). The time
+        # of the last success and the error totals are stored so they survive a restart; the
+        # duration, the error streak and the file size are live values.
+        self.last_fetch_duration: float | None = None
+        self.last_success: datetime | None = None
+        self.consecutive_errors = 0
+        self.total_errors = 0
+        self.last_error: str | None = None
+        self.last_error_time: datetime | None = None
+        self.storage_size: int | None = None
 
     # ------------------------------------------------------------------ storage
 
@@ -87,6 +109,12 @@ class FddbCoordinator(DataUpdateCoordinator[FddbData]):
         self.goal = stored.get("goal")
         self.fddb_goal = stored.get("fddb_goal")
         self._backfilled = stored.get("backfilled", False)
+        diagnostics = stored.get("diagnostics", {})
+        self.last_success = _parse_time(diagnostics.get("last_success"))
+        self.total_errors = int(diagnostics.get("total_errors", 0))
+        self.last_error = diagnostics.get("last_error")
+        self.last_error_time = _parse_time(diagnostics.get("last_error_time"))
+        await self._async_refresh_storage_size()
 
     def _data(self) -> dict[str, Any]:
         return {
@@ -94,7 +122,28 @@ class FddbCoordinator(DataUpdateCoordinator[FddbData]):
             "goal": self.goal,
             "fddb_goal": self.fddb_goal,
             "backfilled": self._backfilled,
+            "diagnostics": {
+                "last_success": _format_time(self.last_success),
+                "total_errors": self.total_errors,
+                "last_error": self.last_error,
+                "last_error_time": _format_time(self.last_error_time),
+            },
         }
+
+    async def _async_refresh_storage_size(self) -> None:
+        """Read the size of the storage file (None while it does not exist yet).
+
+        The file is written with a delay after changes, so this shows the file as the previous
+        save left it; it is refreshed on every poll.
+        """
+
+        def _size() -> int | None:
+            try:
+                return os.stat(self._store.path).st_size
+            except OSError:
+                return None
+
+        self.storage_size = await self.hass.async_add_executor_job(_size)
 
     @callback
     def _schedule_save(self) -> None:
@@ -143,6 +192,31 @@ class FddbCoordinator(DataUpdateCoordinator[FddbData]):
             raise UpdateFailed(str(err)) from err
 
     async def _async_update_data(self) -> FddbData:
+        await self._async_refresh_storage_size()
+        started = monotonic()
+        try:
+            data = await self._async_poll()
+        except Exception as err:
+            self._record_failure(err, monotonic() - started)
+            raise
+        self._record_success(monotonic() - started)
+        return data
+
+    def _record_success(self, duration: float) -> None:
+        self.last_fetch_duration = round(duration, 3)
+        self.last_success = datetime.now(timezone.utc)
+        self.consecutive_errors = 0
+        self._schedule_save()
+
+    def _record_failure(self, err: Exception, duration: float) -> None:
+        self.last_fetch_duration = round(duration, 3)
+        self.consecutive_errors += 1
+        self.total_errors += 1
+        self.last_error = str(err)[:255] or type(err).__name__
+        self.last_error_time = datetime.now(timezone.utc)
+        self._schedule_save()
+
+    async def _async_poll(self) -> FddbData:
         today = fddb_today()
         diary = await self._fetch(today)
         self._remember(diary, final=False)
@@ -197,7 +271,6 @@ class FddbCoordinator(DataUpdateCoordinator[FddbData]):
             avg_7_days=average(7),
             avg_30_days=average(30),
             streak=streak,
-            last_update=datetime.now(FDDB_TZ),
         )
 
     # ------------------------------------------------------------------ background jobs

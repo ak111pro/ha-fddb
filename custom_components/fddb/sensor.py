@@ -17,6 +17,7 @@ from homeassistant.const import (
     PERCENTAGE,
     EntityCategory,
     UnitOfEnergy,
+    UnitOfInformation,
     UnitOfMass,
     UnitOfTime,
 )
@@ -41,6 +42,9 @@ class FddbSensorDescription(SensorEntityDescription):
     attributes_fn: Callable[[FddbData, FddbCoordinator], dict[str, Any]] | None = None
     # Only for state class TOTAL: the moment the value started counting from zero.
     last_reset_fn: Callable[[date], datetime] | None = None
+    # Diagnostics about the fetching itself stay available while a fetch fails; everything else
+    # becomes unavailable together with the failed update.
+    always_available: bool = False
 
 
 # Values that start at zero at the beginning of a period (day, week, month) use state class
@@ -159,11 +163,56 @@ SENSORS: tuple[FddbSensorDescription, ...] = (
         value_fn=_goal_percent,
         attributes_fn=lambda _data, coordinator: {"goal_source": coordinator.effective_goal[1]},
     ),
+    # --- diagnostics -------------------------------------------------------------------
     FddbSensorDescription(
         key="last_update",
         device_class=SensorDeviceClass.TIMESTAMP,
         entity_category=EntityCategory.DIAGNOSTIC,
-        value_fn=lambda data, _c: data.last_update,
+        always_available=True,
+        value_fn=lambda _data, coordinator: coordinator.last_success,
+    ),
+    FddbSensorDescription(
+        key="fetch_duration",
+        device_class=SensorDeviceClass.DURATION,
+        native_unit_of_measurement=UnitOfTime.SECONDS,
+        state_class=SensorStateClass.MEASUREMENT,
+        suggested_display_precision=2,
+        entity_category=EntityCategory.DIAGNOSTIC,
+        always_available=True,
+        value_fn=lambda _data, coordinator: coordinator.last_fetch_duration,
+    ),
+    FddbSensorDescription(
+        key="consecutive_errors",
+        state_class=SensorStateClass.MEASUREMENT,
+        suggested_display_precision=0,
+        entity_category=EntityCategory.DIAGNOSTIC,
+        always_available=True,
+        value_fn=lambda _data, coordinator: coordinator.consecutive_errors,
+        attributes_fn=lambda _data, coordinator: {
+            "last_error": coordinator.last_error,
+            "last_error_time": (
+                coordinator.last_error_time.isoformat() if coordinator.last_error_time else None
+            ),
+        },
+    ),
+    FddbSensorDescription(
+        key="total_errors",
+        state_class=SensorStateClass.TOTAL_INCREASING,
+        suggested_display_precision=0,
+        entity_category=EntityCategory.DIAGNOSTIC,
+        always_available=True,
+        value_fn=lambda _data, coordinator: coordinator.total_errors,
+    ),
+    FddbSensorDescription(
+        key="storage_size",
+        device_class=SensorDeviceClass.DATA_SIZE,
+        native_unit_of_measurement=UnitOfInformation.BYTES,
+        suggested_unit_of_measurement=UnitOfInformation.KILOBYTES,
+        state_class=SensorStateClass.MEASUREMENT,
+        suggested_display_precision=1,
+        entity_category=EntityCategory.DIAGNOSTIC,
+        always_available=True,
+        value_fn=lambda _data, coordinator: coordinator.storage_size,
     ),
 )
 
@@ -184,11 +233,15 @@ class FddbSensor(FddbEntity, SensorEntity):
 
     # The product list is only useful as a live attribute (templates, cards). Keeping it out of
     # the recorder avoids the 16 KB attribute limit and a database row per change.
-    _unrecorded_attributes = frozenset({"products"})
+    _unrecorded_attributes = frozenset({"products", "last_error", "last_error_time"})
 
     def __init__(self, coordinator: FddbCoordinator, description: FddbSensorDescription) -> None:
         super().__init__(coordinator, description.key)
         self.entity_description = description
+
+    @property
+    def available(self) -> bool:
+        return self.entity_description.always_available or super().available
 
     @property
     def native_value(self) -> float | int | datetime | None:

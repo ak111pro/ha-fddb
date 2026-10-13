@@ -61,9 +61,18 @@ in English with the German name in parentheses.
 | Daily calorie goal (FDDB) (Tägliches Kalorienziel (FDDB)) | sensor | kcal | The goal read from your FDDB account; unknown while FDDB shows none (see [Daily calorie goal](#daily-calorie-goal)) |
 | Calories remaining (Verbleibende Kalorien) | sensor | kcal | Effective goal minus today; unknown while there is no goal |
 | Goal progress (Zielerreichung) | sensor | % | Today as percentage of the effective goal. Attribute `goal_source` is `manual` or `fddb` (`null` without a goal) |
-| Last update (Letzte Aktualisierung) | sensor (diagnostic) | | Time of the last successful read |
+| Last update (Letzte Aktualisierung) | sensor (diagnostic) | | Time of the last successful read; kept across restarts |
+| Last fetch duration (Dauer des letzten Abrufs) | sensor (diagnostic) | s | How long the last update took, including a failed one (for example a timeout) |
+| Consecutive fetch errors (Aufeinanderfolgende Abruffehler) | sensor (diagnostic) | | Failed updates in a row, back to 0 after a success. Attributes `last_error` and `last_error_time` keep the most recent failure (also after it recovered) |
+| Fetch errors total (Abruffehler gesamt) | sensor (diagnostic) | | Failed updates counted since the integration was set up (kept across restarts) |
+| Storage size (Speichergröße) | sensor (diagnostic) | B (shown as kB) | Size of the integration's file in Home Assistant's `.storage` folder. Refreshed on every update, so it shows the file as the previous save left it |
 | Daily calorie goal (Tägliches Kalorienziel) | number (config) | kcal | Optional override of the FDDB goal; 0 = use the FDDB goal. Stored by the integration |
 | Problem (Problem) | binary sensor (diagnostic) | | On when the last update failed; attribute `error` has the reason |
+
+The diagnostic sensors stay available while an update fails (all other sensors become
+unavailable). Only the regular update counts for duration and errors; failures of the
+background jobs (nightly yesterday read, history backfill) are only logged. Per-integration CPU
+or memory use cannot be measured, because all integrations share the Home Assistant process.
 
 Daily values (calories, macros, number of products) use state class `total` with
 `last_reset` at midnight German time; weekly and monthly calories reset on Monday and on the
@@ -200,7 +209,9 @@ calculated in that time zone. The week starts on Monday. Yesterday is read once 
 - Right after setup, the previous **31 days** are fetched once in the background (one
   request every 1.5 seconds) so averages, week and month sums have data immediately.
 - History is kept for **400 days**.
-- The calorie goal (the number entity and the last goal read from FDDB) is stored there too. Removing the integration removes this data.
+- The calorie goal (the number entity and the last goal read from FDDB) is stored there too, as are the
+  time of the last successful read and the error counters of the diagnostic sensors. Removing the
+  integration removes this data.
 
 ## Limitations
 

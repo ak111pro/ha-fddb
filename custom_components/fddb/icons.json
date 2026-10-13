@@ -19,7 +19,12 @@
       "streak": { "default": "mdi:fire-circle" },
       "calories_remaining": { "default": "mdi:scale-balance" },
       "goal_fddb": { "default": "mdi:bullseye" },
-      "goal_progress": { "default": "mdi:bullseye-arrow" }
+      "goal_progress": { "default": "mdi:bullseye-arrow" },
+      "last_update": { "default": "mdi:clock-check-outline" },
+      "fetch_duration": { "default": "mdi:timer-outline" },
+      "consecutive_errors": { "default": "mdi:alert-circle-outline" },
+      "total_errors": { "default": "mdi:counter" },
+      "storage_size": { "default": "mdi:database-outline" }
     },
     "number": {
       "goal": { "default": "mdi:bullseye" }

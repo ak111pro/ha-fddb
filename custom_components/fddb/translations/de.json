@@ -101,6 +101,18 @@
       },
       "last_update": {
         "name": "Letzte Aktualisierung"
+      },
+      "fetch_duration": {
+        "name": "Dauer des letzten Abrufs"
+      },
+      "consecutive_errors": {
+        "name": "Aufeinanderfolgende Abruffehler"
+      },
+      "total_errors": {
+        "name": "Abruffehler gesamt"
+      },
+      "storage_size": {
+        "name": "Speichergröße"
       }
     },
     "number": {

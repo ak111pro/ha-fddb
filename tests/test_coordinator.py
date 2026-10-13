@@ -8,7 +8,7 @@ client, a fake store and a minimal config entry, so nothing touches the network 
 from __future__ import annotations
 
 import asyncio
-from datetime import timedelta
+from datetime import datetime, timedelta, timezone
 import importlib
 from types import SimpleNamespace
 
@@ -196,3 +196,146 @@ def test_effective_goal(mods, manual, fddb, expected):
         return coordinator.effective_goal
 
     assert run(mods, FakeClient(None), scenario) == expected
+
+
+# --- diagnostics bookkeeping (#11) ---------------------------------------------------------
+
+
+def _clock(monkeypatch, mods, *values):
+    """Make the coordinator's stopwatch return ``values`` in turn (two readings per poll)."""
+    readings = iter(values)
+    monkeypatch.setattr(mods.coordinator, "monotonic", lambda: next(readings))
+
+
+def test_successful_poll_records_duration_and_time(mods, monkeypatch):
+    _clock(monkeypatch, mods, 100.0, 101.2345)
+    today = mods.coordinator.fddb_today()
+
+    async def scenario(coordinator):
+        before = datetime.now(timezone.utc)
+        await coordinator._async_update_data()  # noqa: SLF001
+        return coordinator, before
+
+    coordinator, before = run(mods, FakeClient(lambda day: _diary(mods, day)), scenario)
+    assert coordinator.last_fetch_duration == 1.234
+    assert before <= coordinator.last_success <= datetime.now(timezone.utc)
+    assert coordinator.last_success.tzinfo is not None
+    assert (coordinator.consecutive_errors, coordinator.total_errors) == (0, 0)
+    assert coordinator.last_error is None
+    assert today.isoformat() in coordinator._days  # noqa: SLF001
+
+
+def test_failures_count_up_and_a_success_resets_the_streak(mods, monkeypatch):
+    _clock(monkeypatch, mods, 0, 2.5, 10, 10.5, 20, 20.25, 30, 31)
+    today = mods.coordinator.fddb_today()
+    outcomes = [
+        mods.parser.FddbConnectionError("fddb.info answered HTTP 502"),
+        mods.parser.FddbParseError("odd page"),
+        _diary(mods, today),
+        mods.parser.FddbConnectionError("down again"),
+    ]
+    from homeassistant.helpers.update_coordinator import UpdateFailed
+
+    async def scenario(coordinator):
+        seen = []
+        for _ in outcomes:
+            try:
+                await coordinator._async_update_data()  # noqa: SLF001
+            except UpdateFailed:
+                pass
+            seen.append(
+                (
+                    coordinator.consecutive_errors,
+                    coordinator.total_errors,
+                    coordinator.last_fetch_duration,
+                    coordinator.last_error,
+                )
+            )
+        return coordinator, seen
+
+    queue = list(outcomes)
+    client = FakeClient(lambda _day: queue.pop(0))
+    coordinator, seen = run(mods, client, scenario)
+    assert seen == [
+        (1, 1, 2.5, "fddb.info answered HTTP 502"),
+        (2, 2, 0.5, "odd page"),
+        (0, 2, 0.25, "odd page"),  # streak resets, the last error is kept for reference
+        (1, 3, 1.0, "down again"),
+    ]
+    assert coordinator.last_error_time is not None
+    assert coordinator.last_success is not None
+
+
+def test_auth_failure_counts_too(mods, monkeypatch):
+    _clock(monkeypatch, mods, 0, 1)
+    from homeassistant.exceptions import ConfigEntryAuthFailed
+
+    async def scenario(coordinator):
+        with pytest.raises(ConfigEntryAuthFailed):
+            await coordinator._async_update_data()  # noqa: SLF001
+        return coordinator
+
+    coordinator = run(mods, FakeClient(mods.parser.FddbAuthError("bad password")), scenario)
+    assert (coordinator.consecutive_errors, coordinator.total_errors) == (1, 1)
+    assert coordinator.last_error == "bad password"
+
+
+def test_long_error_texts_are_cut_and_empty_ones_get_the_type(mods):
+    async def scenario(coordinator):
+        coordinator._record_failure(RuntimeError("x" * 1000), 1.0)  # noqa: SLF001
+        long = coordinator.last_error
+        coordinator._record_failure(RuntimeError(), 1.0)  # noqa: SLF001
+        return long, coordinator.last_error
+
+    long, empty = run(mods, FakeClient(None), scenario)
+    assert len(long) == 255
+    assert empty == "RuntimeError"
+
+
+def test_diagnostics_are_stored_and_restored(mods):
+    store = FakeStore()
+
+    async def first(coordinator):
+        coordinator._record_failure(RuntimeError("boom"), 1.0)  # noqa: SLF001
+        coordinator._record_failure(RuntimeError("boom 2"), 1.0)  # noqa: SLF001
+        coordinator._record_success(1.0)  # noqa: SLF001
+        return coordinator._data()["diagnostics"]  # noqa: SLF001
+
+    saved = run(mods, FakeClient(None), first, store=store)
+    assert saved["total_errors"] == 2
+    assert saved["last_error"] == "boom 2"
+
+    async def second(coordinator):
+        return coordinator
+
+    restarted = run(mods, FakeClient(None), second, store=FakeStore({"diagnostics": saved}))
+    assert restarted.total_errors == 2
+    assert restarted.last_error == "boom 2"
+    assert restarted.last_success.isoformat() == saved["last_success"]
+    assert restarted.last_error_time.isoformat() == saved["last_error_time"]
+    # live values start fresh after a restart
+    assert restarted.consecutive_errors == 0
+    assert restarted.last_fetch_duration is None
+
+
+@pytest.mark.parametrize("stored", [None, {}, {"diagnostics": {"last_success": "not a date"}}])
+def test_missing_or_damaged_diagnostics_are_ignored(mods, stored):
+    async def scenario(coordinator):
+        return coordinator
+
+    coordinator = run(mods, FakeClient(None), scenario, store=FakeStore(stored))
+    assert coordinator.last_success is None
+    assert coordinator.total_errors == 0
+
+
+def test_storage_size_follows_the_file(mods, tmp_path):
+    store = FakeStore()
+    store.path = str(tmp_path / "fddb.test")
+
+    async def scenario(coordinator):
+        missing = coordinator.storage_size
+        (tmp_path / "fddb.test").write_bytes(b"x" * 1234)
+        await coordinator._async_refresh_storage_size()  # noqa: SLF001
+        return missing, coordinator.storage_size
+
+    assert run(mods, FakeClient(None), scenario, store=store) == (None, 1234)

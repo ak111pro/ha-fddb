@@ -37,7 +37,6 @@ def _make_sensor(sensor_module, key, load_fixture, goal=None, fddb_goal=None):
         avg_7_days=2000.0,
         avg_30_days=1900.0,
         streak=3,
-        last_update=datetime(2026, 10, 7, 12, 0, tzinfo=timezone.utc),
     )
     coordinator_module = sys.modules["fddb_under_test.coordinator"]
 
@@ -49,6 +48,13 @@ def _make_sensor(sensor_module, key, load_fixture, goal=None, fddb_goal=None):
         data=data,
         goal=goal,
         fddb_goal=fddb_goal,
+        last_success=datetime(2026, 10, 7, 12, 0, tzinfo=timezone.utc),
+        last_fetch_duration=1.234,
+        consecutive_errors=2,
+        total_errors=7,
+        last_error="fddb.info answered HTTP 502",
+        last_error_time=datetime(2026, 10, 7, 11, 30, tzinfo=timezone.utc),
+        storage_size=45678,
         config_entry=SimpleNamespace(unique_id="user", entry_id="abc", title="user"),
         last_update_success=True,
     )
@@ -69,7 +75,7 @@ def test_products_attribute_is_not_recorded(sensor_module):
 
 def test_other_sensors_have_no_extra_attributes(sensor_module, load_fixture):
     for description in sensor_module.SENSORS:
-        if description.key in ("calories", "goal_progress"):
+        if description.key in ("calories", "goal_progress", "consecutive_errors"):
             continue
         sensor = _make_sensor(sensor_module, description.key, load_fixture)
         assert not sensor.extra_state_attributes, description.key
@@ -104,7 +110,12 @@ EXPECTED = {
     "calories_remaining": (None, "measurement", "kcal", None, 0),
     "goal_progress": (None, "measurement", "%", None, 0),
     "last_update": ("timestamp", None, None, None, None),
+    "fetch_duration": ("duration", "measurement", "s", None, 2),
+    "consecutive_errors": (None, "measurement", None, None, 0),
+    "total_errors": (None, "total_increasing", None, None, 0),
+    "storage_size": ("data_size", "measurement", "B", None, 1),
 }
+DIAGNOSTIC = {"last_update", "fetch_duration", "consecutive_errors", "total_errors", "storage_size"}
 
 
 def test_every_sensor_is_covered(sensor_module):
@@ -183,3 +194,42 @@ def test_fddb_goal_sensor_reports_the_goal_from_fddb(sensor_module, load_fixture
     sensor = _make_sensor(sensor_module, "goal_fddb", load_fixture, goal=1800, fddb_goal=2400)
     assert sensor.native_value == 2400  # independent of the manual goal
     assert _make_sensor(sensor_module, "goal_fddb", load_fixture).native_value is None
+
+
+# --- diagnostics (#11) -----------------------------------------------------------------------
+
+
+def test_diagnostic_sensors_are_diagnostic_and_always_available(sensor_module, load_fixture):
+    for description in sensor_module.SENSORS:
+        is_diagnostic = description.entity_category == "diagnostic"
+        assert is_diagnostic == (description.key in DIAGNOSTIC), description.key
+        sensor = _make_sensor(sensor_module, description.key, load_fixture)
+        sensor.coordinator.last_update_success = False  # a failed fetch
+        assert sensor.available == is_diagnostic, description.key
+
+
+def test_diagnostic_values(sensor_module, load_fixture):
+    def value(key):
+        return _make_sensor(sensor_module, key, load_fixture).native_value
+
+    assert value("last_update") == datetime(2026, 10, 7, 12, 0, tzinfo=timezone.utc)
+    assert value("fetch_duration") == 1.234
+    assert value("consecutive_errors") == 2
+    assert value("total_errors") == 7
+    assert value("storage_size") == 45678
+
+
+def test_consecutive_errors_carries_the_last_error(sensor_module, load_fixture):
+    sensor = _make_sensor(sensor_module, "consecutive_errors", load_fixture)
+    assert sensor.extra_state_attributes == {
+        "last_error": "fddb.info answered HTTP 502",
+        "last_error_time": "2026-10-07T11:30:00+00:00",
+    }
+    # error texts are not worth a recorder row each
+    unrecorded = sensor_module.FddbSensor._Entity__combined_unrecorded_attributes
+    assert {"last_error", "last_error_time"} <= unrecorded
+
+
+def test_storage_size_is_shown_in_kilobytes(sensor_module):
+    description = next(d for d in sensor_module.SENSORS if d.key == "storage_size")
+    assert description.suggested_unit_of_measurement == "kB"
