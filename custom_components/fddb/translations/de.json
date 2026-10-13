@@ -69,6 +69,9 @@
       "cholesterol": {
         "name": "Cholesterin heute"
       },
+      "water": {
+        "name": "Wasser aus Speisen und Getränken heute"
+      },
       "salt": {
         "name": "Salz heute"
       },

@@ -28,6 +28,7 @@ no public API. Everything is configured in the UI.
 - Today's calories, fat, carbohydrates, sugar, protein, fibre and number of products
 - Further values of the diary page: alcohol, bread units (BE), salt and cholesterol
 - Vitamins and minerals of the diary page (20 sensors, disabled by default)
+- Water content of the logged foods and drinks (not a drinking-intake tracker; FDDB has none)
 - Macro shares of today's energy (protein, carbohydrates, fat)
 - Yesterday, this week (Monday to today), this month, 7-day and 30-day averages
 - Logging streak (consecutive days with at least one entry)
@@ -55,6 +56,7 @@ in English with the German name in parentheses.
 | Bread units today (Broteinheiten heute) | sensor | BE | As shown next to the carbohydrate total of the diary, otherwise carbohydrates / 12 g |
 | Cholesterol today (Cholesterin heute) | sensor | mg | Disabled by default |
 | Salt today (Salz heute) | sensor | g | From the *Minerals* table of the diary |
+| Water from food and drinks today (Wasser aus Speisen und Getränken heute) | sensor | L | The *Water* row of the diary page: the water content of everything you logged, foods and drinks. **Not** your drinking intake. Disabled by default |
 | Vitamin C, Retinol (vitamin A), Vitamin D, Vitamin E, Thiamine (vitamin B1), Riboflavin (vitamin B2), Vitamin B6, Vitamin B12 *today* (Vitamin C ... Vitamin B12 heute) | 8 sensors | mg or µg | The vitamins of the diary page. **Disabled by default.** Retinol, vitamin D and vitamin B12 are in µg, the others in mg |
 | Iron, Zinc, Magnesium, Manganese, Fluorine, Chlorine, Copper, Potassium, Calcium, Phosphorus, Sulphur, Iodine *today* (Eisen, Zink, Magnesium, Mangan, Fluor, Chlor, Kupfer, Kalium, Calcium, Phosphor, Schwefel, Jod heute) | 12 sensors | mg or µg | The minerals of the diary page. **Disabled by default.** Iodine is in µg, the others in mg |
 | Products today (Produkte heute) | sensor | | Number of diary entries |
@@ -94,7 +96,9 @@ The profile sensors are read from your FDDB settings page (see [Profile](#profil
 are `unknown` until it was read once and `unknown` for a value your profile does not contain.
 
 FDDB does not show saturated fat or sugar alcohols (polyols) per day, so there are no sensors for
-them. The values of the diary page that are not part of every page (alcohol, salt, cholesterol)
+them. It also has no water intake (drinks tracker) and no water goal on the diary or settings
+page, so there are no such sensors; the water sensor above only reports the water content of the
+foods and drinks you logged. The values of the diary page that are not part of every page (alcohol, salt, cholesterol)
 are `unknown` when a page does not list them, and `0` on a day without entries. Sensors that
 are disabled by default can be enabled under the device's entities (*Settings > Devices &
 services > FDDB*).
@@ -210,6 +214,7 @@ nutrients:  # further values of the page, in g, mg or µg; keys the page does no
   cholesterol: 179.0
   salt: 7.5809
   bread_units: 22.6
+  water: 0.4  # litres, water content of the logged foods and drinks
   vitamin_c: 1.3
   vitamin_d: 2.5192
   iron: 11.8

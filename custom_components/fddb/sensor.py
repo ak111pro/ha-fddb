@@ -21,6 +21,7 @@ from homeassistant.const import (
     UnitOfLength,
     UnitOfMass,
     UnitOfTime,
+    UnitOfVolume,
 )
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
@@ -191,6 +192,14 @@ SENSORS: tuple[FddbSensorDescription, ...] = (
     # Bread units have no device class; FDDB shows 1 BE per 12 g of carbohydrates.
     _nutrient("bread_units", "BE", device_class=None),
     _nutrient("cholesterol", UnitOfMass.MILLIGRAMS, enabled=False),
+    # The water content of the logged foods and drinks (FDDB's "Water" row), NOT the drinking
+    # intake: FDDB has no water intake or water goal.
+    _nutrient(
+        "water",
+        UnitOfVolume.LITERS,
+        device_class=SensorDeviceClass.VOLUME,
+        enabled=False,
+    ),
     _nutrient("salt", precision=2),
     # --- vitamins and minerals, all disabled by default to keep the entity list short -------
     # unit and display precision: (mg, 1) means the parser converts to mg, shown with 1 decimal

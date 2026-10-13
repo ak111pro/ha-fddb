@@ -117,6 +117,7 @@ EXPECTED = {
     "bread_units": (None, "total", "BE", "day", 1),
     "cholesterol": ("weight", "total", "mg", "day", 1),
     "salt": ("weight", "total", "g", "day", 2),
+    "water": ("volume", "total", "L", "day", 1),
     "vitamin_c": ("weight", "total", "mg", "day", 1),
     "retinol": ("weight", "total", "μg", "day", 0),
     "vitamin_d": ("weight", "total", "μg", "day", 1),
@@ -332,11 +333,11 @@ def test_no_sensor_for_personal_profile_details(sensor_module):
 # --- further macronutrients (#8) -------------------------------------------------------------
 
 # Switched on by default: the commonly useful ones. The rest has to be enabled by hand.
-DISABLED_BY_DEFAULT = {"cholesterol"}
+DISABLED_BY_DEFAULT = {"cholesterol", "water"}
 
 
 def test_default_enabled_state_of_the_further_macros(sensor_module):
-    for key in ("alcohol", "bread_units", "cholesterol", "salt"):
+    for key in ("alcohol", "bread_units", "cholesterol", "salt", "water"):
         description = next(d for d in sensor_module.SENSORS if d.key == key)
         assert description.entity_registry_enabled_default == (key not in DISABLED_BY_DEFAULT), key
 
@@ -354,7 +355,7 @@ def test_further_macro_values(sensor_module, load_fixture):
     assert value("bread_units", "diary_normal.html") == 22.5
 
 
-@pytest.mark.parametrize("key", ["alcohol", "bread_units", "cholesterol", "salt"])
+@pytest.mark.parametrize("key", ["alcohol", "bread_units", "cholesterol", "salt", "water"])
 def test_further_macros_report_zero_on_an_empty_day(sensor_module, load_fixture, key):
     sensor = _make_sensor(sensor_module, key, load_fixture)
     sensor.coordinator.data.today = sys.modules["fddb_under_test.parser"].DiaryDay(day=DAY)
@@ -366,7 +367,8 @@ def test_further_macros_report_zero_on_an_empty_day(sensor_module, load_fixture,
 
 def _micronutrient_keys():
     return sorted(
-        set(sys.modules["fddb_under_test.parser"].NUTRIENTS) - {"alcohol", "cholesterol", "salt"}
+        set(sys.modules["fddb_under_test.parser"].NUTRIENTS)
+        - {"alcohol", "cholesterol", "salt", "water"}
     )
 
 
@@ -403,3 +405,20 @@ def test_micronutrients_have_no_extra_attributes(sensor_module, load_fixture):
     # FDDB does not show the share of the recommended daily amount, so there is nothing to add.
     for key in _micronutrient_keys():
         assert not _make_sensor(sensor_module, key, load_fixture).extra_state_attributes, key
+
+
+# --- water (#7) ------------------------------------------------------------------------------
+
+
+def test_water_sensor_is_the_water_in_foods_and_drinks(sensor_module, load_fixture):
+    description = next(d for d in sensor_module.SENSORS if d.key == "water")
+    assert description.device_class == "volume"
+    assert description.native_unit_of_measurement == "L"
+    assert description.entity_registry_enabled_default is False
+    assert _make_sensor(sensor_module, "water", load_fixture).native_value == 0.6
+
+
+def test_no_water_intake_or_goal_sensor(sensor_module):
+    # FDDB has no drinking intake and no water goal on any page the integration reads.
+    keys = {d.key for d in sensor_module.SENSORS}
+    assert not {key for key in keys if "water" in key and key != "water"}

@@ -120,6 +120,8 @@ _LOGIN_TEXTS = {"login", "anmelden"}
 NUTRIENTS: dict[str, tuple[str, str]] = {
     "alcohol": ("Alcohol", "g"),
     "cholesterol": ("Cholesterol", "mg"),
+    # The water content of everything in the diary (foods and drinks), not the drinking intake.
+    "water": ("Water", "l"),
     "salt": ("Salt", "g"),
     # Vitamins
     "vitamin_c": ("Vitamin C", "mg"),

@@ -10,6 +10,7 @@
       "alcohol": { "default": "mdi:glass-cocktail" },
       "bread_units": { "default": "mdi:bread-slice-outline" },
       "cholesterol": { "default": "mdi:heart-pulse" },
+      "water": { "default": "mdi:water-outline" },
       "salt": { "default": "mdi:shaker-outline" },
       "vitamin_c": { "default": "mdi:pill" },
       "retinol": { "default": "mdi:pill" },

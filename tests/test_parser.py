@@ -477,6 +477,7 @@ def test_every_known_nutrient_is_covered_by_the_fixture(full):
         "alcohol",
         "cholesterol",
         "salt",
+        "water",
     }
 
 
@@ -499,3 +500,20 @@ def test_missing_vitamin_table_leaves_those_values_out(load_fixture):
 def test_zero_is_a_value(load_fixture):
     html = load_fixture("diary_full.html").replace("<b>0.1 mg</b>", "<b>0 mg</b>")
     assert parse_diary(html, DAY).nutrients["fluorine"] == 0.0
+
+
+# --- water (#7) ------------------------------------------------------------------------------
+
+
+def test_water_is_the_content_of_foods_and_drinks_in_litres(full):
+    assert full.nutrients["water"] == 0.6
+    assert parser_module.NUTRIENTS["water"] == ("Water", "l")
+
+
+def test_water_in_millilitres_is_converted(load_fixture):
+    html = load_fixture("diary_full.html").replace("0.6 litres", "250 ml")
+    assert parse_diary(html, DAY).nutrients["water"] == 0.25
+
+
+def test_water_row_is_optional(normal):
+    assert "water" not in normal.nutrients

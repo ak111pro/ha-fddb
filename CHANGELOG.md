@@ -21,6 +21,11 @@
 
 ### Added
 
+- Water sensor (#7): *Water from food and drinks today* (`water`, litres, device class *volume*,
+  state class `total` with `last_reset` at midnight German time, **disabled by default**). It
+  is FDDB's *Water* row of the diary page, the water content of everything logged (foods and
+  drinks), **not** a drinking-intake tracker. FDDB shows no water intake and no water goal on
+  the diary or the settings page, so there are no such sensors.
 - Vitamin and mineral sensors from the diary page (#9), all **disabled by default** to keep the
   entity list short: *Vitamin C*, *Retinol (vitamin A)*, *Vitamin D*, *Vitamin E*, *Thiamine
   (vitamin B1)*, *Riboflavin (vitamin B2)*, *Vitamin B6*, *Vitamin B12*, *Iron*, *Zinc*,
