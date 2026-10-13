@@ -395,10 +395,10 @@ def test_nutrient_is_zero_on_a_day_without_entries(load_fixture):
         ("0.0182 mg", "mg", 0.0182),
         ("1,250 mg", "mg", 1250),
         ("0.5 g", "mg", 500),
-        ("2.5192 μg", "µg", 2.5192),  # Greek mu, as FDDB writes it
-        ("2.5 µg", "µg", 2.5),  # micro sign
-        ("0.0326 mg", "µg", 32.6),
-        ("0.179 mg", "µg", 179),
+        ("2.5192 μg", "ug", 2.5192),  # Greek mu, as FDDB writes it
+        ("2.5 µg", "ug", 2.5),  # micro sign
+        ("0.0326 mg", "ug", 32.6),
+        ("0.179 mg", "ug", 179),
         ("0.4 litres", "l", 0.4),
         ("250 ml", "l", 0.25),
         ("5 mg", "l", None),  # wrong kind of unit
@@ -438,3 +438,64 @@ def test_nutrients_in_as_dict(full):
     data = full.as_dict()
     assert data["nutrients"]["alcohol"] == 2.5
     assert full.as_dict(with_products=False)["nutrients"]["salt"] == 3.2154
+
+
+# --- vitamins and minerals (#9) --------------------------------------------------------------
+
+VITAMINS_AND_MINERALS = {
+    # key: (value on the page in the fixture, expected in the unit of the key)
+    "vitamin_c": 12.5,  # mg
+    "retinol": 52.5,  # page: 0.0525 mg, key is in µg
+    "vitamin_d": 1.8,  # µg
+    "vitamin_e": 2.4,
+    "thiamine": 0.314,
+    "riboflavin": 0.5,
+    "vitamin_b6": 0.45,
+    "vitamin_b12": 1.25,  # µg
+    "iron": 4.2,
+    "zinc": 3.1,
+    "magnesium": 98.6,
+    "manganese": 1.2,
+    "fluorine": 0.1,
+    "chlorine": 1500.5,
+    "copper": 0.4,
+    "potassium": 812.3,
+    "calcium": 215,
+    "phosphorus": 410.8,
+    "sulphur": 120,
+    "iodine": 15.2,  # page: 0.0152 mg, key is in µg
+}
+
+
+def test_all_vitamins_and_minerals_are_read(full):
+    for key, expected in VITAMINS_AND_MINERALS.items():
+        assert full.nutrients[key] == pytest.approx(expected), key
+
+
+def test_every_known_nutrient_is_covered_by_the_fixture(full):
+    assert set(parser_module.NUTRIENTS) == set(VITAMINS_AND_MINERALS) | {
+        "alcohol",
+        "cholesterol",
+        "salt",
+    }
+
+
+def test_vitamin_d_in_either_unit(load_fixture):
+    # FDDB writes the same nutrient in µg one day and in mg the next.
+    html = load_fixture("diary_full.html").replace("<b>1.8 μg</b>", "<b>0.0326 mg</b>")
+    assert parse_diary(html, DAY).nutrients["vitamin_d"] == pytest.approx(32.6)
+
+
+def test_missing_vitamin_table_leaves_those_values_out(load_fixture):
+    html = load_fixture("diary_full.html")
+    start = html.index("<h3>Vitamins</h3>")
+    end = html.index("<p></p><h3>Minerals</h3>")
+    diary = parse_diary(html[:start] + html[end:], DAY)
+    assert "vitamin_c" not in diary.nutrients
+    assert diary.nutrients["iron"] == 4.2
+    assert diary.nutrients["alcohol"] == 2.5
+
+
+def test_zero_is_a_value(load_fixture):
+    html = load_fixture("diary_full.html").replace("<b>0.1 mg</b>", "<b>0 mg</b>")
+    assert parse_diary(html, DAY).nutrients["fluorine"] == 0.0

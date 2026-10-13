@@ -117,6 +117,26 @@ EXPECTED = {
     "bread_units": (None, "total", "BE", "day", 1),
     "cholesterol": ("weight", "total", "mg", "day", 1),
     "salt": ("weight", "total", "g", "day", 2),
+    "vitamin_c": ("weight", "total", "mg", "day", 1),
+    "retinol": ("weight", "total", "μg", "day", 0),
+    "vitamin_d": ("weight", "total", "μg", "day", 1),
+    "vitamin_e": ("weight", "total", "mg", "day", 1),
+    "thiamine": ("weight", "total", "mg", "day", 2),
+    "riboflavin": ("weight", "total", "mg", "day", 2),
+    "vitamin_b6": ("weight", "total", "mg", "day", 2),
+    "vitamin_b12": ("weight", "total", "μg", "day", 1),
+    "iron": ("weight", "total", "mg", "day", 1),
+    "zinc": ("weight", "total", "mg", "day", 1),
+    "magnesium": ("weight", "total", "mg", "day", 0),
+    "manganese": ("weight", "total", "mg", "day", 2),
+    "fluorine": ("weight", "total", "mg", "day", 2),
+    "chlorine": ("weight", "total", "mg", "day", 0),
+    "copper": ("weight", "total", "mg", "day", 2),
+    "potassium": ("weight", "total", "mg", "day", 0),
+    "calcium": ("weight", "total", "mg", "day", 0),
+    "phosphorus": ("weight", "total", "mg", "day", 0),
+    "sulphur": ("weight", "total", "mg", "day", 0),
+    "iodine": ("weight", "total", "μg", "day", 0),
     "products": (None, "total", None, "day", 0),
     "protein_share": (None, "measurement", "%", None, 0),
     "carbs_share": (None, "measurement", "%", None, 0),
@@ -339,3 +359,47 @@ def test_further_macros_report_zero_on_an_empty_day(sensor_module, load_fixture,
     sensor = _make_sensor(sensor_module, key, load_fixture)
     sensor.coordinator.data.today = sys.modules["fddb_under_test.parser"].DiaryDay(day=DAY)
     assert sensor.native_value == 0.0
+
+
+# --- vitamins and minerals (#9) --------------------------------------------------------------
+
+
+def _micronutrient_keys():
+    return sorted(
+        set(sys.modules["fddb_under_test.parser"].NUTRIENTS) - {"alcohol", "cholesterol", "salt"}
+    )
+
+
+def test_micronutrients_are_disabled_by_default(sensor_module):
+    keys = _micronutrient_keys()
+    assert len(keys) == 20
+    for key in keys:
+        description = next(d for d in sensor_module.SENSORS if d.key == key)
+        assert description.entity_registry_enabled_default is False, key
+        assert description.entity_category is None, key
+
+
+def test_sensor_unit_matches_the_unit_the_parser_converts_to(sensor_module):
+    # The parser converts a value to the unit named in NUTRIENTS; the sensor must declare the same.
+    names = {"ug": "μg", "mg": "mg", "g": "g", "l": "L"}
+    nutrients = sys.modules["fddb_under_test.parser"].NUTRIENTS
+    for key, (_label, unit) in nutrients.items():
+        description = next(d for d in sensor_module.SENSORS if d.key == key)
+        assert description.native_unit_of_measurement == names[unit], key
+
+
+def test_micronutrient_values_and_units(sensor_module, load_fixture):
+    def value(key, diary="diary_full.html"):
+        return _make_sensor(sensor_module, key, load_fixture, diary=diary).native_value
+
+    assert value("vitamin_c") == 12.5
+    assert value("retinol") == pytest.approx(52.5)  # page shows 0.0525 mg
+    assert value("iodine") == pytest.approx(15.2)  # page shows 0.0152 mg
+    assert value("calcium") == 215
+    assert value("vitamin_c", "diary_normal.html") is None  # page without the vitamin table
+
+
+def test_micronutrients_have_no_extra_attributes(sensor_module, load_fixture):
+    # FDDB does not show the share of the recommended daily amount, so there is nothing to add.
+    for key in _micronutrient_keys():
+        assert not _make_sensor(sensor_module, key, load_fixture).extra_state_attributes, key

@@ -21,6 +21,18 @@
 
 ### Added
 
+- Vitamin and mineral sensors from the diary page (#9), all **disabled by default** to keep the
+  entity list short: *Vitamin C*, *Retinol (vitamin A)*, *Vitamin D*, *Vitamin E*, *Thiamine
+  (vitamin B1)*, *Riboflavin (vitamin B2)*, *Vitamin B6*, *Vitamin B12*, *Iron*, *Zinc*,
+  *Magnesium*, *Manganese*, *Fluorine*, *Chlorine*, *Copper*, *Potassium*, *Calcium*,
+  *Phosphorus*, *Sulphur* and *Iodine*, each named "... today" (`vitamin_c`, `retinol`,
+  `vitamin_d`, `vitamin_e`, `thiamine`, `riboflavin`, `vitamin_b6`, `vitamin_b12`, `iron`,
+  `zinc`, `magnesium`, `manganese`, `fluorine`, `chlorine`, `copper`, `potassium`, `calcium`,
+  `phosphorus`, `sulphur`, `iodine`). Device class *weight*, unit mg (retinol, vitamin D,
+  vitamin B12 and iodine: µg), state class `total` with `last_reset` at midnight German time.
+  FDDB switches the unit with the size of a value, so every value is converted from the unit
+  the page shows. The page gives no share of the recommended daily amount, so there is no such
+  attribute. Values are also in the `nutrients` key of the `get_diary` response.
 - Further daily macronutrients from the diary page (#8): *Alcohol today* (`alcohol`, g),
   *Bread units today* (`bread_units`, BE, no device class), *Salt today* (`salt`, g, from the
   "Minerals" table) and *Cholesterol today* (`cholesterol`, mg, disabled by default). Same

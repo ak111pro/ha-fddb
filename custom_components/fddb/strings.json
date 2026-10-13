@@ -72,6 +72,66 @@
       "salt": {
         "name": "Salt today"
       },
+      "vitamin_c": {
+        "name": "Vitamin C today"
+      },
+      "retinol": {
+        "name": "Retinol (vitamin A) today"
+      },
+      "vitamin_d": {
+        "name": "Vitamin D today"
+      },
+      "vitamin_e": {
+        "name": "Vitamin E today"
+      },
+      "thiamine": {
+        "name": "Thiamine (vitamin B1) today"
+      },
+      "riboflavin": {
+        "name": "Riboflavin (vitamin B2) today"
+      },
+      "vitamin_b6": {
+        "name": "Vitamin B6 today"
+      },
+      "vitamin_b12": {
+        "name": "Vitamin B12 today"
+      },
+      "iron": {
+        "name": "Iron today"
+      },
+      "zinc": {
+        "name": "Zinc today"
+      },
+      "magnesium": {
+        "name": "Magnesium today"
+      },
+      "manganese": {
+        "name": "Manganese today"
+      },
+      "fluorine": {
+        "name": "Fluorine today"
+      },
+      "chlorine": {
+        "name": "Chlorine today"
+      },
+      "copper": {
+        "name": "Copper today"
+      },
+      "potassium": {
+        "name": "Potassium today"
+      },
+      "calcium": {
+        "name": "Calcium today"
+      },
+      "phosphorus": {
+        "name": "Phosphorus today"
+      },
+      "sulphur": {
+        "name": "Sulphur today"
+      },
+      "iodine": {
+        "name": "Iodine today"
+      },
       "products": {
         "name": "Products today"
       },

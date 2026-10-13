@@ -65,6 +65,32 @@ def _grams(key: str) -> FddbSensorDescription:
     )
 
 
+# key, unit, display precision. Vitamin D, retinol, B12 and iodine are in micrograms (FDDB writes
+# them in µg or mg depending on the size of the value, the parser converts), all others in mg.
+MICRONUTRIENTS: tuple[tuple[str, str, int], ...] = (
+    ("vitamin_c", UnitOfMass.MILLIGRAMS, 1),
+    ("retinol", UnitOfMass.MICROGRAMS, 0),
+    ("vitamin_d", UnitOfMass.MICROGRAMS, 1),
+    ("vitamin_e", UnitOfMass.MILLIGRAMS, 1),
+    ("thiamine", UnitOfMass.MILLIGRAMS, 2),
+    ("riboflavin", UnitOfMass.MILLIGRAMS, 2),
+    ("vitamin_b6", UnitOfMass.MILLIGRAMS, 2),
+    ("vitamin_b12", UnitOfMass.MICROGRAMS, 1),
+    ("iron", UnitOfMass.MILLIGRAMS, 1),
+    ("zinc", UnitOfMass.MILLIGRAMS, 1),
+    ("magnesium", UnitOfMass.MILLIGRAMS, 0),
+    ("manganese", UnitOfMass.MILLIGRAMS, 2),
+    ("fluorine", UnitOfMass.MILLIGRAMS, 2),
+    ("chlorine", UnitOfMass.MILLIGRAMS, 0),
+    ("copper", UnitOfMass.MILLIGRAMS, 2),
+    ("potassium", UnitOfMass.MILLIGRAMS, 0),
+    ("calcium", UnitOfMass.MILLIGRAMS, 0),
+    ("phosphorus", UnitOfMass.MILLIGRAMS, 0),
+    ("sulphur", UnitOfMass.MILLIGRAMS, 0),
+    ("iodine", UnitOfMass.MICROGRAMS, 0),
+)
+
+
 def _nutrient(
     key: str,
     unit: str | None = UnitOfMass.GRAMS,
@@ -166,6 +192,12 @@ SENSORS: tuple[FddbSensorDescription, ...] = (
     _nutrient("bread_units", "BE", device_class=None),
     _nutrient("cholesterol", UnitOfMass.MILLIGRAMS, enabled=False),
     _nutrient("salt", precision=2),
+    # --- vitamins and minerals, all disabled by default to keep the entity list short -------
+    # unit and display precision: (mg, 1) means the parser converts to mg, shown with 1 decimal
+    *(
+        _nutrient(key, unit, precision=precision, enabled=False)
+        for key, unit, precision in MICRONUTRIENTS
+    ),
     FddbSensorDescription(
         key="products",
         state_class=SensorStateClass.TOTAL,

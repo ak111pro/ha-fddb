@@ -121,6 +121,28 @@ NUTRIENTS: dict[str, tuple[str, str]] = {
     "alcohol": ("Alcohol", "g"),
     "cholesterol": ("Cholesterol", "mg"),
     "salt": ("Salt", "g"),
+    # Vitamins
+    "vitamin_c": ("Vitamin C", "mg"),
+    "retinol": ("Retinol", "ug"),
+    "vitamin_d": ("Vitamin D", "ug"),
+    "vitamin_e": ("Vitamin E", "mg"),
+    "thiamine": ("Thiamine", "mg"),
+    "riboflavin": ("Riboflavin", "mg"),
+    "vitamin_b6": ("Vitamin B6", "mg"),
+    "vitamin_b12": ("Vitamin B12", "ug"),
+    # Minerals
+    "iron": ("Iron", "mg"),
+    "zinc": ("Zinc", "mg"),
+    "magnesium": ("Magnesium", "mg"),
+    "manganese": ("Manganese", "mg"),
+    "fluorine": ("Fluorine", "mg"),
+    "chlorine": ("Chlorine", "mg"),
+    "copper": ("Copper", "mg"),
+    "potassium": ("Potassium", "mg"),
+    "calcium": ("Calcium", "mg"),
+    "phosphorus": ("Phosphorus", "mg"),
+    "sulphur": ("Sulphur", "mg"),
+    "iodine": ("Iodine", "ug"),
 }
 _LABEL_TO_NUTRIENT = {label.lower(): (key, unit) for key, (label, unit) in NUTRIENTS.items()}
 
@@ -129,8 +151,8 @@ GRAMS_PER_BREAD_UNIT = 12.0
 _BREAD_UNITS = re.compile(r"\(\s*([\d.,]+)\s*BE\s*\)", re.IGNORECASE)
 _VALUE_WITH_UNIT = re.compile(r"^\s*(\d[\d,]*(?:\.\d+)?|\.\d+)\s*([^\d\s(.,][^\s(]*)?")
 # Factors to the smallest unit of each family (micrograms, millilitres). FDDB writes the Greek
-# letter "μ", normalised to the micro sign "µ" before the lookup.
-_MASS_UNITS = {"µg": 1.0, "ug": 1.0, "mcg": 1.0, "mg": 1_000.0, "g": 1_000_000.0}
+# letter "μ" (U+03BC); it and the micro sign (U+00B5) are read as "u" before the lookup.
+_MASS_UNITS = {"ug": 1.0, "mcg": 1.0, "mg": 1_000.0, "g": 1_000_000.0}
 _VOLUME_UNITS = {
     "ml": 1.0,
     "l": 1_000.0,
@@ -158,7 +180,7 @@ def _cell_value(cell: Tag) -> float:
 
 
 def _convert(text: str, target: str) -> float | None:
-    """The number in ``text`` ("2.5 μg", "0.1 litres") in ``target`` ("µg", "mg", "g", "l").
+    """The number in ``text`` ("2.5 μg", "0.1 litres") in ``target`` ("ug", "mg", "g" or "l").
 
     None if there is no number or the unit is missing, unknown or of another kind (mass versus
     volume), so a changed page never produces a wrong value.
@@ -166,7 +188,7 @@ def _convert(text: str, target: str) -> float | None:
     match = _VALUE_WITH_UNIT.match(text)
     if match is None or match.group(2) is None:
         return None
-    unit = match.group(2).lower().replace("μ", "µ")
+    unit = match.group(2).lower().replace("\u03bc", "u").replace("\u00b5", "u")
     family = _VOLUME_UNITS if target == "l" else _MASS_UNITS
     if unit not in family:
         return None
