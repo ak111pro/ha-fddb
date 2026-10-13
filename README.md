@@ -277,6 +277,14 @@ calculated in that time zone. The week starts on Monday. Yesterday is read once 
   binary sensor turns on and the log shows the reason; please open an issue then.
 - The diary and the settings page are requested in English because the parser relies on English
   labels (for example "thereof Sugar", "Required calories per day"). Your FDDB account language is not changed.
+- **HACS shows a placeholder instead of the FDDB icon** in its own repository list. The icon is
+  fine inside Home Assistant (Settings > Devices & services, the device page), where it is
+  served from `custom_components/fddb/brand/` (Home Assistant 2026.3 and newer). HACS 2.0.5
+  still loads its list icons only from the public `brands.home-assistant.io` CDN, and the
+  `home-assistant/brands` repository no longer accepts images for custom integrations, so
+  there is nothing this integration can do about it. It is a known HACS limitation
+  ([hacs/integration#5171](https://github.com/hacs/integration/issues/5171)) and it does not
+  affect HACS downloads or updates. The icon will appear once HACS reads the brand folder.
 - Please do not poll aggressively. The default of 30 minutes is plenty; the minimum is 10.
 - Values are whatever FDDB shows. Days you edit later are re-read only when they are
   today, yesterday (nightly) or fetched with `fddb.get_diary`.

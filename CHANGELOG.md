@@ -81,6 +81,9 @@
 
 ### Changed
 
+- README: documented why HACS lists the integration without an icon (HACS limitation, tracked
+  in hacs/integration#5171; the icon from `custom_components/fddb/brand/` is shown inside
+  Home Assistant and the HACS brand check passes) (#2).
 - Device classes, state classes and display precision for all sensors (#12):
   - Fat, carbohydrates, sugar, protein and fibre today: device class *weight* (unit g, was no
     class); Calories today, this week and this month: device class *energy* (unit kcal, was no
