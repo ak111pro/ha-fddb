@@ -517,3 +517,62 @@ def test_water_in_millilitres_is_converted(load_fixture):
 
 def test_water_row_is_optional(normal):
     assert "water" not in normal.nutrients
+
+
+# --- energy balance (#14) --------------------------------------------------------------------
+
+
+@pytest.fixture
+def meals_html(load_fixture) -> str:
+    return load_fixture("diary_meals.html")
+
+
+def test_balance_surplus_is_positive(meals_html):
+    # "You consumed 586 kJ (140 kcal) more energy than you require"
+    assert parse_diary(meals_html, DAY).balance == 140.0
+
+
+def test_balance_deficit_is_negative(meals_html):
+    html = meals_html.replace("<b>more energy</b>", "<b>less energy</b>")
+    assert parse_diary(html, DAY).balance == -140.0
+
+
+def test_balance_without_kcal_uses_kilojoules(meals_html):
+    html = meals_html.replace("(140 kcal)", "")
+    assert parse_diary(html, DAY).balance == round(586 / parser_module.KJ_PER_KCAL)
+
+
+def test_balance_with_thousands_separator(meals_html):
+    html = meals_html.replace("(140 kcal)", "(1,140 kcal)")
+    assert parse_diary(html, DAY).balance == 1140.0
+
+
+@pytest.mark.parametrize(
+    "replacement",
+    [
+        "You consumed exactly what you require",  # no direction word
+        "You consumed <b>more energy</b> than you require",  # no number
+        "",
+    ],
+)
+def test_unreadable_balance_is_none(meals_html, replacement):
+    start = meals_html.index("You consumed")
+    end = meals_html.index("</div>", start)
+    assert parse_diary(meals_html[:start] + replacement + meals_html[end:], DAY).balance is None
+
+
+def test_page_without_balance_block_gives_none(normal, load_fixture):
+    assert normal.balance is None
+    assert parse_diary(load_fixture("diary_empty.html"), DAY).balance is None
+
+
+def test_balance_on_a_day_without_a_product_table(meals_html):
+    start = meals_html.index('<table class="myday-table-std"')
+    end = meals_html.index("</table>", start) + len("</table>")
+    diary = parse_diary(meals_html[:start] + meals_html[end:], DAY)
+    assert diary.balance == 140.0
+    assert diary.products == []
+
+
+def test_balance_is_in_the_get_diary_data(meals_html):
+    assert parse_diary(meals_html, DAY).as_dict()["balance"] == 140.0

@@ -21,6 +21,15 @@
 
 ### Added
 
+- Energy balance sensors (#14): *Energy balance today* (`balance`) and *Energy balance yesterday*
+  (`balance_yesterday`), in kcal, state class `measurement`, no device class (energy does not
+  allow `measurement`). They carry FDDB's own *Balance* block of the diary page ("You consumed
+  586 kJ (140 kcal) more energy than you require"): **positive = surplus, negative = deficit**,
+  so consumed minus the energy you require including activities. The "less energy" wording of a
+  deficit is an assumption (no real sample was available), as is a missing kcal figure being
+  taken from kJ / 4.184. Both sensors are `unknown` when the page has no readable balance block.
+  The balance is stored with each day, so yesterday's value survives a restart; days stored by
+  an earlier version have none. It is also in the `balance` key of the `get_diary` response.
 - Water sensor (#7): *Water from food and drinks today* (`water`, litres, device class *volume*,
   state class `total` with `last_reset` at midnight German time, **disabled by default**). It
   is FDDB's *Water* row of the diary page, the water content of everything logged (foods and

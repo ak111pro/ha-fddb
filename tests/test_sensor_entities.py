@@ -45,6 +45,7 @@ def _make_sensor(
         avg_7_days=2000.0,
         avg_30_days=1900.0,
         streak=3,
+        yesterday_balance=-250.0,
     )
     coordinator_module = sys.modules["fddb_under_test.coordinator"]
     if profile == "default":
@@ -143,6 +144,8 @@ EXPECTED = {
     "carbs_share": (None, "measurement", "%", None, 0),
     "fat_share": (None, "measurement", "%", None, 0),
     "calories_yesterday": (None, "measurement", "kcal", None, 0),
+    "balance": (None, "measurement", "kcal", None, 0),
+    "balance_yesterday": (None, "measurement", "kcal", None, 0),
     "calories_week": ("energy", "total", "kcal", "week", 0),
     "calories_month": ("energy", "total", "kcal", "month", 0),
     "calories_avg_7d": (None, "measurement", "kcal", None, 0),
@@ -422,3 +425,25 @@ def test_no_water_intake_or_goal_sensor(sensor_module):
     # FDDB has no drinking intake and no water goal on any page the integration reads.
     keys = {d.key for d in sensor_module.SENSORS}
     assert not {key for key in keys if "water" in key and key != "water"}
+
+
+# --- energy balance (#14) --------------------------------------------------------------------
+
+
+def test_balance_sensors(sensor_module, load_fixture):
+    today = _make_sensor(sensor_module, "balance", load_fixture, diary="diary_meals.html")
+    assert today.native_value == 140.0  # surplus: positive
+    assert today.device_class is None
+    assert today.state_class == "measurement"
+    assert today.native_unit_of_measurement == "kcal"
+    assert not today.extra_state_attributes
+    yesterday = _make_sensor(sensor_module, "balance_yesterday", load_fixture)
+    assert yesterday.native_value == -250.0  # deficit: negative
+
+
+def test_balance_is_unknown_without_the_block(sensor_module, load_fixture):
+    # diary_normal.html has no "Balance" block
+    assert _make_sensor(sensor_module, "balance", load_fixture).native_value is None
+    sensor = _make_sensor(sensor_module, "balance_yesterday", load_fixture)
+    sensor.coordinator.data.yesterday_balance = None
+    assert sensor.native_value is None

@@ -150,6 +150,12 @@
       "calories_yesterday": {
         "name": "Kalorien gestern"
       },
+      "balance": {
+        "name": "Energiebilanz heute"
+      },
+      "balance_yesterday": {
+        "name": "Energiebilanz gestern"
+      },
       "calories_week": {
         "name": "Kalorien diese Woche"
       },

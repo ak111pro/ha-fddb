@@ -466,3 +466,56 @@ def test_storage_size_follows_the_file(mods, tmp_path):
         return missing, coordinator.storage_size
 
     assert run(mods, FakeClient(None), scenario, store=store) == (None, 1234)
+
+
+# --- energy balance (#14) ------------------------------------------------------------------
+
+
+def test_balance_of_yesterday_comes_from_the_stored_day(mods):
+    today = mods.coordinator.fddb_today()
+    yesterday = today - timedelta(days=1)
+
+    def results(day):
+        diary = _diary(mods, day)
+        diary.balance = -300.0 if day == yesterday else 125.0
+        return diary
+
+    async def scenario(coordinator):
+        data = await coordinator._async_update_data()  # noqa: SLF001
+        return data, coordinator._days  # noqa: SLF001
+
+    data, days = run(mods, FakeClient(results), scenario)
+    assert data.today.balance == 125.0
+    assert days[today.isoformat()]["balance"] == 125.0
+    # Without a stored yesterday the value is unknown
+    assert data.yesterday_balance is None
+
+
+def test_yesterdays_balance_after_the_nightly_finalisation(mods):
+    yesterday = mods.coordinator.fddb_today() - timedelta(days=1)
+
+    def results(day):
+        diary = _diary(mods, day)
+        diary.balance = -300.0 if day == yesterday else 125.0
+        return diary
+
+    async def scenario(coordinator):
+        await coordinator._async_update_data()  # noqa: SLF001
+        await coordinator._async_finalize_yesterday(None)  # noqa: SLF001
+        return coordinator._build(_diary(mods, mods.coordinator.fddb_today()))  # noqa: SLF001
+
+    assert run(mods, FakeClient(results), scenario).yesterday_balance == -300.0
+
+
+def test_a_stored_day_from_an_older_version_has_no_balance(mods):
+    yesterday = mods.coordinator.fddb_today() - timedelta(days=1)
+    store = FakeStore(
+        {"days": {yesterday.isoformat(): {"calories": 1500.0, "products": 3, "final": True}}}
+    )
+
+    async def scenario(coordinator):
+        return coordinator._build(_diary(mods, mods.coordinator.fddb_today()))  # noqa: SLF001
+
+    data = run(mods, FakeClient(None), scenario, store=store)
+    assert data.yesterday_calories == 1500.0
+    assert data.yesterday_balance is None

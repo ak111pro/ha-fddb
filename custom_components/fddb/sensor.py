@@ -225,6 +225,10 @@ SENSORS: tuple[FddbSensorDescription, ...] = (
         for macro in ("protein", "carbs", "fat")
     ),
     _kcal_measurement("calories_yesterday", lambda data, _c: data.yesterday_calories),
+    # FDDB's energy balance of the day: consumed minus required (with activities), so positive is
+    # a surplus. A signed snapshot, so measurement and no device class.
+    _kcal_measurement("balance", lambda data, _c: data.today.balance),
+    _kcal_measurement("balance_yesterday", lambda data, _c: data.yesterday_balance),
     _kcal_total("calories_week", lambda data, _c: data.week_calories, week_start),
     _kcal_total("calories_month", lambda data, _c: data.month_calories, month_start),
     _kcal_measurement("calories_avg_7d", lambda data, _c: data.avg_7_days),

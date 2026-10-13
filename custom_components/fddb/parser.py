@@ -73,6 +73,9 @@ class DiaryDay:
     # Further per-day values of the diary page by key (see ``NUTRIENTS`` and ``bread_units``),
     # in the unit of that key. A key is missing when the page does not show the value.
     nutrients: dict[str, float] = field(default_factory=dict)
+    # FDDB's energy balance of the day in kcal: positive = more energy consumed than required
+    # (surplus), negative = less (deficit). None when the page has no readable "Balance" block.
+    balance: float | None = None
 
     @property
     def has_entries(self) -> bool:
@@ -220,6 +223,42 @@ def _nutrients(soup: BeautifulSoup) -> dict[str, float]:
     return found
 
 
+def _summary_text(soup: BeautifulSoup, label: str) -> str | None:
+    """Text of the value cell of a summary block ("Required energy", "Balance") of the diary.
+
+    These blocks are tables whose first cell has the label in bold and whose second cell holds
+    the value, e.g. ``<b>586 kJ</b> (140 kcal) <b>more energy</b> than you require``.
+    """
+    for bold in soup.find_all("b"):
+        if bold.get_text(strip=True).lower() != label:
+            continue
+        cell = bold.find_parent("td")
+        value = cell.find_next_sibling("td") if cell is not None else None
+        if value is not None:
+            return " ".join(value.get_text(" ", strip=True).split())
+    return None
+
+
+_BALANCE_DIRECTION = re.compile(r"\b(more|less|fewer)\s+energy\b", re.IGNORECASE)
+
+
+def _balance_kcal(soup: BeautifulSoup) -> float | None:
+    """The signed energy balance in kcal from the "Balance" block, None if it is not readable.
+
+    "You consumed 586 kJ (140 kcal) more energy than you require" is +140. The "less energy"
+    variant (a deficit) is assumed to read the same way and gives a negative value.
+    """
+    text = _summary_text(soup, "balance")
+    if text is None:
+        return None
+    direction = _BALANCE_DIRECTION.search(text)
+    amount = _required_kcal(text)
+    if direction is None or amount is None:
+        _LOGGER.debug("Diary balance block not readable")
+        return None
+    return amount if direction.group(1).lower() == "more" else -amount
+
+
 def _bread_units(carbs_cell: Tag, carbs: float) -> float:
     """Bread units of the day: as shown next to the carbohydrate total, else carbs / 12 g."""
     match = _BREAD_UNITS.search(carbs_cell.get_text(" ", strip=True))
@@ -304,13 +343,15 @@ def _parse_diary(html: str, day: date) -> DiaryDay:
     if is_logged_out(soup):
         raise FddbAuthError("Not logged in")
 
+    balance = _balance_kcal(soup)
+
     table = soup.select_one("table.myday-table-std")
     if table is None:
-        return DiaryDay(day=day)
+        return DiaryDay(day=day, balance=balance)
 
     rows = [r for r in table.find_all("tr") if r.find_all("td", recursive=False)]
     if not rows:
-        return DiaryDay(day=day)
+        return DiaryDay(day=day, balance=balance)
 
     footer, product_rows = rows[-1], rows[:-1]
     footer_cells = footer.find_all("td", recursive=False)
@@ -337,6 +378,7 @@ def _parse_diary(html: str, day: date) -> DiaryDay:
         fibre=_labelled_value(soup, _FIBRE),
         products=products,
         nutrients=nutrients,
+        balance=balance,
     )
 
 

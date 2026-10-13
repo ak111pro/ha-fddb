@@ -37,6 +37,8 @@
       "carbs_share": { "default": "mdi:chart-pie" },
       "fat_share": { "default": "mdi:chart-pie" },
       "calories_yesterday": { "default": "mdi:calendar-arrow-left" },
+      "balance": { "default": "mdi:plus-minus-variant" },
+      "balance_yesterday": { "default": "mdi:calendar-arrow-left" },
       "calories_week": { "default": "mdi:calendar-week" },
       "calories_month": { "default": "mdi:calendar-month" },
       "calories_avg_7d": { "default": "mdi:chart-line" },

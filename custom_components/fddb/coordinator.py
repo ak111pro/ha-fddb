@@ -64,6 +64,7 @@ class FddbData:
     avg_7_days: float | None
     avg_30_days: float | None
     streak: int
+    yesterday_balance: float | None = None
 
 
 class FddbCoordinator(DataUpdateCoordinator[FddbData]):
@@ -170,6 +171,7 @@ class FddbCoordinator(DataUpdateCoordinator[FddbData]):
     def _remember(self, diary: DiaryDay, final: bool) -> None:
         record = {key: getattr(diary, key) for key in TOTAL_KEYS}
         record["products"] = len(diary.products)
+        record["balance"] = diary.balance
         record["final"] = final
         self._days[diary.day.isoformat()] = record
         cutoff = (fddb_today() - timedelta(days=KEEP_DAYS)).isoformat()
@@ -313,6 +315,9 @@ class FddbCoordinator(DataUpdateCoordinator[FddbData]):
             avg_7_days=average(7),
             avg_30_days=average(30),
             streak=streak,
+            yesterday_balance=self._days.get((today - timedelta(days=1)).isoformat(), {}).get(
+                "balance"
+            ),
         )
 
     # ------------------------------------------------------------------ background jobs

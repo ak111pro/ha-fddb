@@ -32,6 +32,7 @@ no public API. Everything is configured in the UI.
 - Macro shares of today's energy (protein, carbohydrates, fat)
 - Yesterday, this week (Monday to today), this month, 7-day and 30-day averages
 - Logging streak (consecutive days with at least one entry)
+- Energy balance of the day as FDDB reports it (surplus positive, deficit negative), also for yesterday
 - Daily calorie goal (read from your FDDB profile, or set by hand) with remaining calories and goal progress
 - Profile values from FDDB: height, weight, body mass index, occupation, sports, weight goal and activity index
 - Problem sensor that tells you when FDDB could not be read
@@ -64,6 +65,8 @@ in English with the German name in parentheses.
 | Carbohydrate share (Kohlenhydratanteil) | sensor | % | |
 | Fat share (Fettanteil) | sensor | % | |
 | Calories yesterday (Kalorien gestern) | sensor | kcal | Needs stored history, see below |
+| Energy balance today (Energiebilanz heute) | sensor | kcal | FDDB's *Balance* block of the diary page: energy consumed minus the energy you require (with activities). **Positive = surplus, negative = deficit.** State class `measurement`, no device class. Unknown when the page has no readable balance |
+| Energy balance yesterday (Energiebilanz gestern) | sensor | kcal | The same value for yesterday (from the stored, finalised day); needs stored history, see below |
 | Calories this week (Kalorien diese Woche) | sensor | kcal | Monday to today |
 | Calories this month (Kalorien diesen Monat) | sensor | kcal | 1st of the month to today |
 | Average calories 7 days (Durchschnitt Kalorien 7 Tage) | sensor | kcal | Mean of the last 7 days before today, only days with entries |
