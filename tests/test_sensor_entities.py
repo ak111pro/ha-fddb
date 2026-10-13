@@ -26,7 +26,7 @@ def sensor_module(fddb_ha):
 DAY = date(2026, 10, 7)
 
 
-def _make_sensor(sensor_module, key, load_fixture, goal=None, fddb_goal=None):
+def _make_sensor(sensor_module, key, load_fixture, goal=None, fddb_goal=None, profile="default"):
     parser = sys.modules["fddb_under_test.parser"]
     today = parser.parse_diary(load_fixture("diary_normal.html"), DAY)
     data = SimpleNamespace(
@@ -39,6 +39,8 @@ def _make_sensor(sensor_module, key, load_fixture, goal=None, fddb_goal=None):
         streak=3,
     )
     coordinator_module = sys.modules["fddb_under_test.coordinator"]
+    if profile == "default":
+        profile = parser.parse_profile(load_fixture("profile_en.html"))
 
     class FakeCoordinator(SimpleNamespace):
         # Use the real override logic, not a copy of it.
@@ -48,6 +50,7 @@ def _make_sensor(sensor_module, key, load_fixture, goal=None, fddb_goal=None):
         data=data,
         goal=goal,
         fddb_goal=fddb_goal,
+        profile=profile,
         last_success=datetime(2026, 10, 7, 12, 0, tzinfo=timezone.utc),
         last_fetch_duration=1.234,
         consecutive_errors=2,
@@ -75,7 +78,13 @@ def test_products_attribute_is_not_recorded(sensor_module):
 
 def test_other_sensors_have_no_extra_attributes(sensor_module, load_fixture):
     for description in sensor_module.SENSORS:
-        if description.key in ("calories", "goal_progress", "consecutive_errors"):
+        if description.key in (
+            "calories",
+            "goal_progress",
+            "consecutive_errors",
+            "bmi",
+            "occupation",
+        ):
             continue
         sensor = _make_sensor(sensor_module, description.key, load_fixture)
         assert not sensor.extra_state_attributes, description.key
@@ -114,8 +123,18 @@ EXPECTED = {
     "consecutive_errors": (None, "measurement", None, None, 0),
     "total_errors": (None, "total_increasing", None, None, 0),
     "storage_size": ("data_size", "measurement", "B", None, 1),
+    "height": ("distance", "measurement", "cm", None, 0),
+    "weight": ("weight", "measurement", "kg", None, 1),
+    "bmi": (None, "measurement", None, None, 0),
+    "occupation": (None, None, None, None, None),
+    "sports": (None, None, None, None, None),
+    "profile_goal": (None, None, None, None, None),
+    "activity_index": (None, "measurement", "%", None, 0),
 }
+# Diagnostics about the fetching itself: stay available while a fetch fails.
 DIAGNOSTIC = {"last_update", "fetch_duration", "consecutive_errors", "total_errors", "storage_size"}
+# Profile values: diagnostic category, but unavailable together with a failed update.
+PROFILE_DIAGNOSTIC = {"height", "occupation", "sports", "profile_goal", "activity_index"}
 
 
 def test_every_sensor_is_covered(sensor_module):
@@ -202,10 +221,12 @@ def test_fddb_goal_sensor_reports_the_goal_from_fddb(sensor_module, load_fixture
 def test_diagnostic_sensors_are_diagnostic_and_always_available(sensor_module, load_fixture):
     for description in sensor_module.SENSORS:
         is_diagnostic = description.entity_category == "diagnostic"
-        assert is_diagnostic == (description.key in DIAGNOSTIC), description.key
+        assert is_diagnostic == (description.key in DIAGNOSTIC | PROFILE_DIAGNOSTIC), (
+            description.key
+        )
         sensor = _make_sensor(sensor_module, description.key, load_fixture)
         sensor.coordinator.last_update_success = False  # a failed fetch
-        assert sensor.available == is_diagnostic, description.key
+        assert sensor.available == (description.key in DIAGNOSTIC), description.key
 
 
 def test_diagnostic_values(sensor_module, load_fixture):
@@ -233,3 +254,44 @@ def test_consecutive_errors_carries_the_last_error(sensor_module, load_fixture):
 def test_storage_size_is_shown_in_kilobytes(sensor_module):
     description = next(d for d in sensor_module.SENSORS if d.key == "storage_size")
     assert description.suggested_unit_of_measurement == "kB"
+
+
+# --- profile sensors (#10) -------------------------------------------------------------------
+
+
+def test_profile_values(sensor_module, load_fixture):
+    def value(key):
+        return _make_sensor(sensor_module, key, load_fixture).native_value
+
+    assert value("height") == 172.0
+    assert value("weight") == 64.5
+    assert value("bmi") == 22.0
+    assert value("occupation") == "easy"  # level only, the description is an attribute
+    assert value("sports") == "no sports"
+    assert value("profile_goal") == "Not specified"
+    assert value("activity_index") == 60.0
+
+
+def test_bmi_and_occupation_attributes(sensor_module, load_fixture):
+    bmi = _make_sensor(sensor_module, "bmi", load_fixture)
+    assert bmi.extra_state_attributes == {"category": "Normal"}
+    occupation = _make_sensor(sensor_module, "occupation", load_fixture)
+    assert occupation.extra_state_attributes == {"description": "easy - Example: Student, ..."}
+
+
+@pytest.mark.parametrize("key", sorted(PROFILE_DIAGNOSTIC | {"weight", "bmi"}))
+def test_profile_sensors_are_unknown_before_the_profile_was_read(sensor_module, load_fixture, key):
+    sensor = _make_sensor(sensor_module, key, load_fixture, profile=None)
+    assert sensor.native_value is None
+
+
+def test_weight_and_bmi_are_regular_sensors(sensor_module):
+    for key in ("weight", "bmi"):
+        description = next(d for d in sensor_module.SENSORS if d.key == key)
+        assert description.entity_category is None
+
+
+def test_no_sensor_for_personal_profile_details(sensor_module):
+    keys = {d.key for d in sensor_module.SENSORS}
+    for personal in ("gender", "birthday", "first_name", "name", "username", "country", "email"):
+        assert not any(personal in key for key in keys), personal

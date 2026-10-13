@@ -31,8 +31,16 @@
   if kcal is missing). *Calories remaining* and *Goal progress* now use the **effective goal**:
   the number entity *Daily calorie goal* when it is above 0, otherwise the FDDB goal; they are
   only `unknown` when both are missing. *Goal progress* has the attribute `goal_source`
-  (`manual` or `fddb`). The settings page costs one extra request at setup and then every 6
-  hours (a failed read is retried after 1 hour and never fails the regular update).
+  (`manual` or `fddb`).
+- Profile sensors from the FDDB settings page (#10): *Weight* (kg, device class *weight*, state
+  class `measurement`), *Body mass index* (state class `measurement`, attribute `category`, for
+  example `Normal`), and the diagnostic sensors *Height* (cm, device class *distance*),
+  *Occupation* (level such as `easy`, attribute `description`), *Sports*, *Profile goal* ("My
+  goal", for example `Not specified`) and *Activity index* (%). Gender, birthday, first name,
+  user name, country and e-mail settings are never read. The profile (and with it the calorie
+  goal) costs one extra request at setup and then every 6 hours (a failed read is retried after
+  1 hour and never fails the regular update); the values are stored and survive a restart. The
+  diagnostics download includes the profile values (nothing personal).
 
 - Diagnostic sensors (category *diagnostic*) for the update itself (#11):
   *Last fetch duration* (`fetch_duration`, s, device class *duration*, measurement, 2 decimals),

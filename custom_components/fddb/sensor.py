@@ -18,6 +18,7 @@ from homeassistant.const import (
     EntityCategory,
     UnitOfEnergy,
     UnitOfInformation,
+    UnitOfLength,
     UnitOfMass,
     UnitOfTime,
 )
@@ -38,7 +39,7 @@ def _macro_share(data: FddbData, macro: str) -> float:
 class FddbSensorDescription(SensorEntityDescription):
     """Describes an FDDB sensor."""
 
-    value_fn: Callable[[FddbData, FddbCoordinator], float | int | datetime | None]
+    value_fn: Callable[[FddbData, FddbCoordinator], float | int | str | datetime | None]
     attributes_fn: Callable[[FddbData, FddbCoordinator], dict[str, Any]] | None = None
     # Only for state class TOTAL: the moment the value started counting from zero.
     last_reset_fn: Callable[[date], datetime] | None = None
@@ -110,6 +111,19 @@ def _goal_percent(data: FddbData, coordinator: FddbCoordinator) -> float | None:
     return round(data.today.calories / goal * 100, 1)
 
 
+def _profile_value(coordinator: FddbCoordinator, name: str) -> float | str | None:
+    """One value of the stored FDDB profile, None until the profile was read."""
+    return getattr(coordinator.profile, name, None)
+
+
+def _occupation_level(coordinator: FddbCoordinator) -> str | None:
+    """ "easy" from FDDB's "easy - Example: Student, ...": the level without the examples."""
+    text = _profile_value(coordinator, "occupation")
+    if not isinstance(text, str):
+        return None
+    return text.split(" - ", 1)[0].strip() or None
+
+
 SENSORS: tuple[FddbSensorDescription, ...] = (
     _kcal_total(
         "calories",
@@ -162,6 +176,59 @@ SENSORS: tuple[FddbSensorDescription, ...] = (
         suggested_display_precision=0,
         value_fn=_goal_percent,
         attributes_fn=lambda _data, coordinator: {"goal_source": coordinator.effective_goal[1]},
+    ),
+    # --- profile (read from the FDDB settings page every few hours) -------------------------
+    FddbSensorDescription(
+        key="height",
+        device_class=SensorDeviceClass.DISTANCE,
+        native_unit_of_measurement=UnitOfLength.CENTIMETERS,
+        state_class=SensorStateClass.MEASUREMENT,
+        suggested_display_precision=0,
+        entity_category=EntityCategory.DIAGNOSTIC,
+        value_fn=lambda _data, coordinator: _profile_value(coordinator, "height_cm"),
+    ),
+    FddbSensorDescription(
+        key="weight",
+        device_class=SensorDeviceClass.WEIGHT,
+        native_unit_of_measurement=UnitOfMass.KILOGRAMS,
+        state_class=SensorStateClass.MEASUREMENT,
+        suggested_display_precision=1,
+        value_fn=lambda _data, coordinator: _profile_value(coordinator, "weight_kg"),
+    ),
+    FddbSensorDescription(
+        key="bmi",
+        state_class=SensorStateClass.MEASUREMENT,
+        suggested_display_precision=0,
+        value_fn=lambda _data, coordinator: _profile_value(coordinator, "bmi"),
+        attributes_fn=lambda _data, coordinator: {
+            "category": _profile_value(coordinator, "bmi_category")
+        },
+    ),
+    FddbSensorDescription(
+        key="occupation",
+        entity_category=EntityCategory.DIAGNOSTIC,
+        value_fn=lambda _data, coordinator: _occupation_level(coordinator),
+        attributes_fn=lambda _data, coordinator: {
+            "description": _profile_value(coordinator, "occupation")
+        },
+    ),
+    FddbSensorDescription(
+        key="sports",
+        entity_category=EntityCategory.DIAGNOSTIC,
+        value_fn=lambda _data, coordinator: _profile_value(coordinator, "sports"),
+    ),
+    FddbSensorDescription(
+        key="profile_goal",
+        entity_category=EntityCategory.DIAGNOSTIC,
+        value_fn=lambda _data, coordinator: _profile_value(coordinator, "goal"),
+    ),
+    FddbSensorDescription(
+        key="activity_index",
+        native_unit_of_measurement=PERCENTAGE,
+        state_class=SensorStateClass.MEASUREMENT,
+        suggested_display_precision=0,
+        entity_category=EntityCategory.DIAGNOSTIC,
+        value_fn=lambda _data, coordinator: _profile_value(coordinator, "activity_index"),
     ),
     # --- diagnostics -------------------------------------------------------------------
     FddbSensorDescription(
@@ -244,7 +311,7 @@ class FddbSensor(FddbEntity, SensorEntity):
         return self.entity_description.always_available or super().available
 
     @property
-    def native_value(self) -> float | int | datetime | None:
+    def native_value(self) -> float | int | str | datetime | None:
         return self.entity_description.value_fn(self.coordinator.data, self.coordinator)
 
     @property

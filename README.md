@@ -30,6 +30,7 @@ no public API. Everything is configured in the UI.
 - Yesterday, this week (Monday to today), this month, 7-day and 30-day averages
 - Logging streak (consecutive days with at least one entry)
 - Daily calorie goal (read from your FDDB profile, or set by hand) with remaining calories and goal progress
+- Profile values from FDDB: height, weight, body mass index, occupation, sports, weight goal and activity index
 - Problem sensor that tells you when FDDB could not be read
 - Actions to refresh on demand and to fetch the full diary (all products) of any day
 - English and German translations, diagnostics download with credentials redacted
@@ -61,6 +62,13 @@ in English with the German name in parentheses.
 | Daily calorie goal (FDDB) (Tägliches Kalorienziel (FDDB)) | sensor | kcal | FDDB's *Required calories per day* from your settings page (see [Daily calorie goal](#daily-calorie-goal)); unknown until the profile was read |
 | Calories remaining (Verbleibende Kalorien) | sensor | kcal | Effective goal minus today; unknown while there is no goal |
 | Goal progress (Zielerreichung) | sensor | % | Today as percentage of the effective goal. Attribute `goal_source` is `manual` or `fddb` (`null` without a goal) |
+| Weight (Gewicht) | sensor | kg | Your weight from the FDDB profile, state class `measurement`, device class *weight* |
+| Body mass index (Body-Mass-Index) | sensor | | BMI from the FDDB profile. Attribute `category` has FDDB's text, for example `Normal` |
+| Height (Körpergröße) | sensor (diagnostic) | cm | From the FDDB profile, device class *distance* |
+| Occupation (Tätigkeit) | sensor (diagnostic) | | The activity level of your occupation, for example `easy`. Attribute `description` has FDDB's full text |
+| Sports (Sport) | sensor (diagnostic) | | Your sports setting, for example `no sports` |
+| Profile goal (Profilziel) | sensor (diagnostic) | | The goal setting of the FDDB profile ("My goal"), for example `Not specified` |
+| Activity index (Aktivitätsindex) | sensor (diagnostic) | % | FDDB's activity index |
 | Last update (Letzte Aktualisierung) | sensor (diagnostic) | | Time of the last successful read; kept across restarts |
 | Last fetch duration (Dauer des letzten Abrufs) | sensor (diagnostic) | s | How long the last update took, including a failed one (for example a timeout) |
 | Consecutive fetch errors (Aufeinanderfolgende Abruffehler) | sensor (diagnostic) | | Failed updates in a row, back to 0 after a success. Attributes `last_error` and `last_error_time` keep the most recent failure (also after it recovered) |
@@ -73,6 +81,9 @@ The diagnostic sensors stay available while an update fails (all other sensors b
 unavailable). Only the regular update counts for duration and errors; failures of the
 background jobs (nightly yesterday read, history backfill) are only logged. Per-integration CPU
 or memory use cannot be measured, because all integrations share the Home Assistant process.
+
+The profile sensors are read from your FDDB settings page (see [Profile](#profile)), so they
+are `unknown` until it was read once and `unknown` for a value your profile does not contain.
 
 Daily values (calories, macros, number of products) use state class `total` with
 `last_reset` at midnight German time; weekly and monthly calories reset on Monday and on the
@@ -120,16 +131,24 @@ If the password changes, Home Assistant asks you to sign in again (re-authentica
 The FDDB goal is the value of **Settings > Required calories per day** in your FDDB account (the
 "Required" row of the Personal Information table on <https://fddb.info/db/i18n/profile20/>). FDDB
 shows it in kJ and kcal; the integration uses the kcal figure and, if that is missing, converts the
-kJ value (kJ / 4.184).
-
-It comes from one extra request to the settings page
-(`https://fddb.info/db/i18n/profile20/?lang=en`), made when the integration is set up (also after
-re-authentication, which reloads it) and then **every 6 hours**, not on every poll, so a change in
-FDDB shows up after at most 6 hours (or after a reload). A failed read is retried after 1 hour,
-never turns *Problem* on and keeps the last value; the last value is also kept across restarts.
-Nothing else from that page is read.
+kJ value (kJ / 4.184). It is read together with the profile (see [Profile](#profile)), not on every
+poll, so a change in FDDB shows up after at most 6 hours (or after a reload of the integration).
+The last value is kept across restarts; if the settings page cannot be read, the old value stays.
 
 Setting the number entity back to 0 switches to the FDDB goal again.
+
+## Profile
+
+The profile values and the goal come from one extra request to your FDDB settings page
+(`https://fddb.info/db/i18n/profile20/?lang=en`). It is made when the integration is set up
+(also after re-authentication, which reloads it) and then **every 6 hours**, not on every poll; a
+failed read is retried after 1 hour and never turns *Problem* on, the last known values stay.
+
+Read are only: height, weight, body mass index (with its category), occupation, sports, the goal
+setting, the activity index and the required calories per day. Gender, birthday, first name, user
+name, country and the e-mail and account settings are **never read**, stored or logged. The
+values are matched by their label text on the English page, so a changed label gives `unknown`
+for that one value (and a debug log line) instead of an error.
 
 ## Actions
 
@@ -212,7 +231,7 @@ calculated in that time zone. The week starts on Monday. Yesterday is read once 
 - Right after setup, the previous **31 days** are fetched once in the background (one
   request every 1.5 seconds) so averages, week and month sums have data immediately.
 - History is kept for **400 days**.
-- The calorie goal (the number entity and the last goal read from FDDB) is stored there too, as are the
+- The calorie goal (the number entity and the last goal read from FDDB) and the last profile values are stored there too, as are the
   time of the last successful read and the error counters of the diagnostic sensors. Removing the
   integration removes this data.
 
@@ -221,8 +240,8 @@ calculated in that time zone. The week starts on Monday. Yesterday is read once 
 - **This is web scraping.** FDDB has no public API, so the integration logs in and parses
   the diary page. It may stop working whenever fddb.info changes its pages. The *Problem*
   binary sensor turns on and the log shows the reason; please open an issue then.
-- The diary and the settings page are requested in English because the parser relies on
-  English labels (for example "thereof Sugar", "Required calories per day"). Your FDDB account language is not changed.
+- The diary and the settings page are requested in English because the parser relies on English
+  labels (for example "thereof Sugar", "Required calories per day"). Your FDDB account language is not changed.
 - Please do not poll aggressively. The default of 30 minutes is plenty; the minimum is 10.
 - Values are whatever FDDB shows. Days you edit later are re-read only when they are
   today, yesterday (nightly) or fetched with `fddb.get_diary`.
@@ -231,7 +250,7 @@ calculated in that time zone. The week starts on Monday. Yesterday is read once 
 
 Your credentials are stored only in your Home Assistant config entries. The integration
 contacts **only fddb.info**; there are no third-party services, telemetry or analytics.
-Diagnostics downloads redact user name and password.
+Diagnostics downloads redact user name and password and contain the profile values listed above (height, weight, ...), but no personal details like your name or birthday.
 
 ## Development
 

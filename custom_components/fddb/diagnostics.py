@@ -28,6 +28,12 @@ async def async_get_config_entry_diagnostics(
         "last_error": coordinator.last_error,
         "last_fetch_duration": coordinator.last_fetch_duration,
         "last_success": coordinator.last_success.isoformat() if coordinator.last_success else None,
+        # Only the values the integration reads (no name, user name, birthday, gender, country).
+        "profile": coordinator.profile.as_dict() if coordinator.profile else None,
+        "profile_updated": (
+            coordinator.profile_updated.isoformat() if coordinator.profile_updated else None
+        ),
+        "fddb_goal": coordinator.fddb_goal,
         "storage_size": coordinator.storage_size,
         "stored_days": len(coordinator._days),  # noqa: SLF001
     }

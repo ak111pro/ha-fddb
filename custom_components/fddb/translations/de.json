@@ -99,6 +99,27 @@
       "goal_progress": {
         "name": "Zielerreichung"
       },
+      "height": {
+        "name": "Körpergröße"
+      },
+      "weight": {
+        "name": "Gewicht"
+      },
+      "bmi": {
+        "name": "Body-Mass-Index"
+      },
+      "occupation": {
+        "name": "Tätigkeit"
+      },
+      "sports": {
+        "name": "Sport"
+      },
+      "profile_goal": {
+        "name": "Profilziel"
+      },
+      "activity_index": {
+        "name": "Aktivitätsindex"
+      },
       "last_update": {
         "name": "Letzte Aktualisierung"
       },
