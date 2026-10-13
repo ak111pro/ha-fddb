@@ -5,6 +5,7 @@ from __future__ import annotations
 from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import datetime
+from typing import Any
 
 from homeassistant.components.sensor import (
     SensorDeviceClass,
@@ -32,6 +33,7 @@ class FddbSensorDescription(SensorEntityDescription):
     """Describes an FDDB sensor."""
 
     value_fn: Callable[[FddbData, FddbCoordinator], float | int | datetime | None]
+    attributes_fn: Callable[[FddbData], dict[str, Any]] | None = None
 
 
 def _grams(key: str) -> FddbSensorDescription:
@@ -63,6 +65,7 @@ SENSORS: tuple[FddbSensorDescription, ...] = (
         state_class=SensorStateClass.MEASUREMENT,
         suggested_display_precision=0,
         value_fn=lambda data, _c: data.today.calories,
+        attributes_fn=lambda data: {"products": data.today.product_attributes()},
     ),
     _grams("fat"),
     _grams("carbs"),
@@ -162,6 +165,10 @@ class FddbSensor(FddbEntity, SensorEntity):
 
     entity_description: FddbSensorDescription
 
+    # The product list is only useful as a live attribute (templates, cards). Keeping it out of
+    # the recorder avoids the 16 KB attribute limit and a database row per change.
+    _unrecorded_attributes = frozenset({"products"})
+
     def __init__(self, coordinator: FddbCoordinator, description: FddbSensorDescription) -> None:
         super().__init__(coordinator, description.key)
         self.entity_description = description
@@ -169,3 +176,9 @@ class FddbSensor(FddbEntity, SensorEntity):
     @property
     def native_value(self) -> float | int | datetime | None:
         return self.entity_description.value_fn(self.coordinator.data, self.coordinator)
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any] | None:
+        if (attributes_fn := self.entity_description.attributes_fn) is None:
+            return None
+        return attributes_fn(self.coordinator.data)

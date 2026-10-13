@@ -42,7 +42,7 @@ in English with the German name in parentheses.
 
 | Entity | Type | Unit | Description |
 | --- | --- | --- | --- |
-| Calories today (Kalorien heute) | sensor | kcal | Total energy logged today |
+| Calories today (Kalorien heute) | sensor | kcal | Total energy logged today. Attribute `products` lists today's diary entries (`name`, `amount`, `calories`, `fat`, `carbs`, `protein`, `link`); it is not recorded in the history |
 | Fat today (Fett heute) | sensor | g | |
 | Carbohydrates today (Kohlenhydrate heute) | sensor | g | |
 | Sugar today (Zucker heute) | sensor | g | Part of the carbohydrates |

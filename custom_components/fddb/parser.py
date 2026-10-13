@@ -72,6 +72,10 @@ class DiaryDay:
     def has_entries(self) -> bool:
         return bool(self.products) or self.calories > 0
 
+    def product_attributes(self) -> list[dict[str, str | float | None]]:
+        """The diary entries for the ``products`` attribute of the daily summary sensor."""
+        return [product.as_attribute() for product in self.products]
+
     def macro_share(self, macro: str) -> float:
         """Share of ``fat``, ``carbs`` or ``protein`` in the energy of the three macros, in %.
 
