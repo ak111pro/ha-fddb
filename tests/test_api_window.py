@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 
 import pytest
 
@@ -19,14 +19,24 @@ def test_window_spans_one_day_minus_one_second():
     assert end - start == 86399
 
 
-@pytest.mark.parametrize("day", [date(2026, 3, 29), date(2026, 10, 25)])
-def test_dst_change_days_stay_inside_the_utc_day(day):
+@pytest.mark.parametrize(
+    ("day", "hours"),
+    [(date(2026, 3, 29), 23), (date(2026, 10, 25), 25), (date(2026, 7, 1), 24)],
+)
+def test_window_follows_the_real_length_of_the_day(day, hours):
+    # fddb-exporter 2.5.0: each day's boundary is resolved separately, so DST days are 23/25 h.
     start, end = diary_window(day)
-    assert end - start == 86399
-    start_utc = datetime.fromtimestamp(start, tz=timezone.utc)
-    end_utc = datetime.fromtimestamp(end, tz=timezone.utc)
-    assert start_utc.date() == day
-    assert end_utc.date() == day or end_utc.date() == date.fromordinal(day.toordinal() + 1)
+    assert end - start + 1 == hours * 3600
+    assert datetime.fromtimestamp(start, tz=FDDB_TZ).date() == day
+
+
+def test_consecutive_windows_have_no_gap_and_no_overlap():
+    day = date(2026, 1, 1)
+    while day.year == 2026:
+        _, end = diary_window(day)
+        next_start, _ = diary_window(day + timedelta(days=1))
+        assert next_start == end + 1, day
+        day += timedelta(days=1)
 
 
 def test_dst_change_days_hit_expected_epochs():
@@ -47,4 +57,4 @@ def test_window_start_is_always_inside_the_requested_german_day():
     while day.year == 2026:
         start, _ = diary_window(day)
         assert datetime.fromtimestamp(start, tz=FDDB_TZ).date() == day, day
-        day = date.fromordinal(day.toordinal() + 1)
+        day += timedelta(days=1)

@@ -6,6 +6,7 @@ from datetime import date
 
 import pytest
 
+from custom_components.fddb import parser as parser_module
 from custom_components.fddb.parser import (
     DiaryDay,
     FddbAuthError,
@@ -187,3 +188,26 @@ def test_amount_split_only_when_text_starts_with_a_quantity():
     )
     assert _AMOUNT.match("0.5 Portion Salat").groups() == ("0.5 Portion", "Salat")
     assert _AMOUNT.match("Bio Apfel Saft") is None
+
+
+def test_unexpected_failure_inside_the_parser_becomes_a_parse_error(normal_html, monkeypatch):
+    # fddb-exporter 2.5.0: never let an unchecked failure escape, report it as a parse error.
+    def boom(_cells):
+        raise AttributeError("layout changed")
+
+    monkeypatch.setattr(parser_module, "_parse_product", boom)
+    with pytest.raises(FddbParseError, match="layout changed"):
+        parse_diary(normal_html, date(2026, 10, 7))
+
+
+def test_totals_are_found_by_label_not_by_position(normal_html):
+    # fddb.info dropped a block above the diary in August 2026, which shifted every absolute
+    # path (fddb-exporter 2.4.0). Extra blocks before or after the tables must not matter.
+    shifted = normal_html.replace(
+        '<div class="quicklinks">',
+        '<div class="notice"><table><tr><td>Note</td><td>Hello</td></tr></table></div>'
+        '<div class="quicklinks">',
+    )
+    diary = parse_diary(shifted, date(2026, 10, 7))
+    assert diary.sugar == 31.4
+    assert diary.fibre == 6.2

@@ -171,7 +171,21 @@ def _labelled_value(soup: BeautifulSoup, label: re.Pattern[str]) -> float:
 
 
 def parse_diary(html: str, day: date) -> DiaryDay:
-    """Parse a diary page. Returns an empty DiaryDay if nothing was logged that day."""
+    """Parse a diary page. Returns an empty DiaryDay if nothing was logged that day.
+
+    Only ``FddbError`` subclasses escape: an unexpected failure inside the parser (a changed page
+    layout can trip almost anything) is reported as ``FddbParseError`` so callers can treat it
+    like any other "website changed" problem instead of crashing.
+    """
+    try:
+        return _parse_diary(html, day)
+    except FddbError:
+        raise
+    except Exception as err:
+        raise FddbParseError(f"Could not parse the diary page: {err!r}") from err
+
+
+def _parse_diary(html: str, day: date) -> DiaryDay:
     soup = BeautifulSoup(html, "html.parser")
     if is_logged_out(soup):
         raise FddbAuthError("Not logged in")

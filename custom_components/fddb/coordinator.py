@@ -27,7 +27,7 @@ from .const import (
     REQUEST_PAUSE,
     STORAGE_VERSION,
 )
-from .parser import DiaryDay, FddbAuthError, FddbError
+from .parser import DiaryDay, FddbAuthError, FddbError, FddbParseError
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -203,6 +203,7 @@ class FddbCoordinator(DataUpdateCoordinator[FddbData]):
 
     async def _async_backfill(self) -> None:
         today = fddb_today()
+        skipped = 0
         for offset in range(1, BACKFILL_DAYS + 1):
             day = today - timedelta(days=offset)
             if self._days.get(day.isoformat(), {}).get("final"):
@@ -212,12 +213,19 @@ class FddbCoordinator(DataUpdateCoordinator[FddbData]):
             except FddbAuthError:
                 self.config_entry.async_start_reauth(self.hass)
                 return
+            except FddbParseError as err:
+                # One odd day must not leave the rest of the history empty (fddb-exporter 2.5.0
+                # also carries on after a single failing day). Connection errors still stop the
+                # run, since every following day would fail the same way.
+                skipped += 1
+                _LOGGER.warning("History backfill skipped %s: %s", day, err)
             except FddbError as err:
                 _LOGGER.warning("History backfill stopped at %s: %s", day, err)
                 return
             await asyncio.sleep(REQUEST_PAUSE)
-        self._backfilled = True
-        self._schedule_save()
+        if not skipped:
+            self._backfilled = True
+            self._schedule_save()
         if self.data is not None:
             self.async_set_updated_data(self._build(self.data.today))
 

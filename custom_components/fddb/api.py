@@ -28,15 +28,23 @@ _LOGGER = logging.getLogger(__name__)
 USER_AGENT = "ha-fddb (Home Assistant integration; +https://github.com/ak111pro/ha-fddb)"
 
 
+def _day_start(day: date) -> int:
+    """Epoch seconds of 02:00 German local time on ``day``.
+
+    FDDB uses German local days; starting two hours after midnight keeps the window inside the
+    right day on both sides of a daylight-saving change.
+    """
+    return int((datetime.combine(day, time(0), tzinfo=FDDB_TZ) + timedelta(hours=2)).timestamp())
+
+
 def diary_window(day: date) -> tuple[int, int]:
     """Return the (start, end) epoch seconds FDDB expects for one diary day.
 
-    FDDB uses German local days; starting two hours after midnight keeps the window
-    inside the right day on both sides of a daylight-saving change.
+    The end is one second before the start of the *next* day, resolved separately. A fixed
+    24 hours would leave a one-hour gap (or overlap) with the neighbouring day on the two days
+    a year when the clocks change (23 or 25 hours long), as the fddb-exporter fixed in 2.5.0.
     """
-    start = datetime.combine(day, time(0), tzinfo=FDDB_TZ) + timedelta(hours=2)
-    start_ts = int(start.timestamp())
-    return start_ts, start_ts + 86400 - 1
+    return _day_start(day), _day_start(day + timedelta(days=1)) - 1
 
 
 class FddbClient:

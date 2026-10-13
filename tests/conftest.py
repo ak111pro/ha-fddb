@@ -8,6 +8,7 @@ is never imported. Instead, lightweight placeholder packages are registered in
 from __future__ import annotations
 
 import importlib
+import importlib.util
 from pathlib import Path
 import sys
 import types
@@ -45,3 +46,23 @@ def load_fixture():
         return (FIXTURES / name).read_text(encoding="utf-8")
 
     return _load
+
+
+@pytest.fixture(scope="session")
+def fddb_ha():
+    """The real package (with its Home Assistant imports) under a private name.
+
+    Skips the test when Home Assistant is not installed (CI only installs the lightweight
+    parser dependencies).
+    """
+    pytest.importorskip("homeassistant")
+    name = "fddb_under_test"
+    if name in sys.modules:
+        return name
+    spec = importlib.util.spec_from_file_location(
+        name, PACKAGE_DIR / "__init__.py", submodule_search_locations=[str(PACKAGE_DIR)]
+    )
+    package = importlib.util.module_from_spec(spec)
+    sys.modules[name] = package
+    spec.loader.exec_module(package)
+    return name

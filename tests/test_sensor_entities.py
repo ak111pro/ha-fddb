@@ -8,8 +8,7 @@ container, see the README's development section.
 from __future__ import annotations
 
 from datetime import date, datetime, timezone
-import importlib.util
-from pathlib import Path
+import importlib
 import sys
 from types import SimpleNamespace
 from zoneinfo import ZoneInfo
@@ -18,20 +17,10 @@ import pytest
 
 pytest.importorskip("homeassistant")
 
-PACKAGE_DIR = Path(__file__).resolve().parent.parent / "custom_components" / "fddb"
-
 
 @pytest.fixture(scope="module")
-def sensor_module():
-    """Load the real package (with its Home Assistant imports) under a private name."""
-    name = "fddb_under_test"
-    spec = importlib.util.spec_from_file_location(
-        name, PACKAGE_DIR / "__init__.py", submodule_search_locations=[str(PACKAGE_DIR)]
-    )
-    package = importlib.util.module_from_spec(spec)
-    sys.modules[name] = package
-    spec.loader.exec_module(package)
-    return importlib.import_module(f"{name}.sensor")
+def sensor_module(fddb_ha):
+    return importlib.import_module(f"{fddb_ha}.sensor")
 
 
 DAY = date(2026, 10, 7)

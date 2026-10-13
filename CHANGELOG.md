@@ -11,6 +11,15 @@
 - The protein, carbohydrate and fat share sensors report `0` % on days without entries instead of
   `unknown` (#6).
 
+- The diary window now ends one second before the next day's start instead of exactly 24 hours
+  after its own start. On the two days a year when the clocks change (23 or 25 hours long) the
+  old window left a one-hour gap or overlap with the neighbouring day (taken over from
+  fddb-exporter 2.5.0, #13).
+- An unexpected failure inside the diary parser is now reported as a parse error ("website
+  probably changed") instead of an unhandled exception (fddb-exporter 2.5.0, #13).
+- The history backfill carries on after a day whose page cannot be parsed and retries that day
+  after the next restart; a connection error still stops it (fddb-exporter 2.5.0, #13).
+
 ### Added
 
 - The *Calories today* sensor has a `products` attribute with today's diary entries
