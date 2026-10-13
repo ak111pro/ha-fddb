@@ -91,10 +91,14 @@ in English with the German name in parentheses.
 | Fetch errors total (Abruffehler gesamt) | sensor (diagnostic) | | Failed updates counted since the integration was set up (kept across restarts) |
 | Storage size (Speichergröße) | sensor (diagnostic) | B (shown as kB) | Size of the integration's file in Home Assistant's `.storage` folder. Refreshed on every update, so it shows the file as the previous save left it |
 | Daily calorie goal (Tägliches Kalorienziel) | number (config) | kcal | Optional override of the FDDB goal; 0 = use the FDDB goal. Stored by the integration |
-| Problem (Problem) | binary sensor (diagnostic) | | On when the last update failed; attribute `error` has the reason |
+| Problem (Problem) | binary sensor (diagnostic) | | On while updates fail; attribute `error` has the reason |
 
-The diagnostic sensors stay available while an update fails (all other sensors become
-unavailable). Only the regular update counts for duration and errors; failures of the
+While an update fails, the sensors keep their last values instead of becoming unavailable, also
+across a restart: the last diary of today that was read in full is stored and shown. If what is
+stored is from an older day (for example a restart after midnight while fddb.info is down),
+today shows the values of a day without entries, never the previous day's numbers. *Problem*
+tells you that the values are not fresh. A rejected login still asks you to sign in again, and
+the very first setup still waits until fddb.info answers. Only the regular update counts for duration and errors; failures of the
 background jobs (nightly yesterday read, history backfill) are only logged. Per-integration CPU
 or memory use cannot be measured, because all integrations share the Home Assistant process.
 

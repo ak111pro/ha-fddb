@@ -24,7 +24,11 @@ async def async_setup_entry(
 
 
 class FddbProblemSensor(FddbEntity, BinarySensorEntity):
-    """On when the last update failed (login, connection or a changed website)."""
+    """On while updates fail (login, connection or a changed website).
+
+    The other sensors keep their last values meanwhile (see ``FddbCoordinator._fallback``), so
+    this follows the error streak rather than ``last_update_success``.
+    """
 
     _attr_device_class = BinarySensorDeviceClass.PROBLEM
     _attr_entity_category = EntityCategory.DIAGNOSTIC
@@ -38,9 +42,8 @@ class FddbProblemSensor(FddbEntity, BinarySensorEntity):
 
     @property
     def is_on(self) -> bool:
-        return not self.coordinator.last_update_success
+        return self.coordinator.consecutive_errors > 0 or not self.coordinator.last_update_success
 
     @property
     def extra_state_attributes(self) -> dict[str, str | None]:
-        error = self.coordinator.last_exception
-        return {"error": str(error) if error and not self.coordinator.last_update_success else None}
+        return {"error": self.coordinator.last_error if self.is_on else None}

@@ -136,6 +136,72 @@ class DiaryDay:
             data.pop("products")
         return data
 
+    @classmethod
+    def from_dict(cls, data: object) -> DiaryDay | None:
+        """Rebuild a stored diary (``as_dict``); None when the day itself is unreadable.
+
+        Like ``Profile.from_dict`` it ignores unknown keys and wrongly typed values, so a file
+        written by another version never breaks the setup.
+        """
+        if not isinstance(data, dict):
+            return None
+        try:
+            day = date.fromisoformat(data.get("day"))
+        except (TypeError, ValueError):
+            return None
+        diary = cls(day=day)
+        for key in ("calories", "fat", "carbs", "sugar", "protein", "fibre", "balance", "goal"):
+            if _is_stored_number(data.get(key)):
+                setattr(diary, key, float(data[key]))
+        nutrients = data.get("nutrients")
+        if isinstance(nutrients, dict):
+            diary.nutrients = {
+                key: float(value)
+                for key, value in nutrients.items()
+                if isinstance(key, str) and _is_stored_number(value)
+            }
+        meals = data.get("meals")
+        if isinstance(meals, dict):
+            for key, meal in meals.items():
+                if isinstance(key, str) and isinstance(meal, dict):
+                    diary.meals[key] = Meal(
+                        calories=_stored_number(meal.get("calories")),
+                        fat=_stored_number(meal.get("fat")),
+                        carbs=_stored_number(meal.get("carbs")),
+                        protein=_stored_number(meal.get("protein")),
+                        products=int(_stored_number(meal.get("products"))),
+                    )
+        products = data.get("products")
+        if isinstance(products, list):
+            for item in products:
+                if isinstance(item, dict) and isinstance(item.get("name"), str):
+                    diary.products.append(
+                        Product(
+                            name=item["name"],
+                            amount=_stored_text(item.get("amount")),
+                            calories=_stored_number(item.get("calories")),
+                            fat=_stored_number(item.get("fat")),
+                            carbs=_stored_number(item.get("carbs")),
+                            protein=_stored_number(item.get("protein")),
+                            link=_stored_text(item.get("link")),
+                            time=_stored_text(item.get("time")),
+                            meal=_stored_text(item.get("meal")),
+                        )
+                    )
+        return diary
+
+
+def _is_stored_number(value: object) -> bool:
+    return isinstance(value, int | float) and not isinstance(value, bool)
+
+
+def _stored_number(value: object) -> float:
+    return float(value) if _is_stored_number(value) else 0.0
+
+
+def _stored_text(value: object) -> str | None:
+    return value if isinstance(value, str) else None
+
 
 _NUMBER = re.compile(r"[^0-9.]")
 # "150 g Pizza", "1 Scoop Whey", "0.5 Portion Salat": amount = number + unit, rest = name.

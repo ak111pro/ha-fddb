@@ -575,3 +575,105 @@ def test_no_goal_anywhere(mods):
         return coordinator.effective_goal
 
     assert run(mods, FakeClient(lambda day: _with_goal(mods, day, None)), scenario) == (None, None)
+
+
+# --- last values while fddb.info cannot be reached (#18) -----------------------------------
+
+
+def test_a_failed_poll_keeps_todays_last_values(mods):
+    today = mods.coordinator.fddb_today()
+    outcomes = [_diary(mods, today, calories=1234.0), mods.parser.FddbConnectionError("down")]
+    queue = list(outcomes)
+
+    async def scenario(coordinator):
+        await coordinator._async_update_data()  # noqa: SLF001
+        return await coordinator._async_update_data(), coordinator  # noqa: SLF001
+
+    data, coordinator = run(mods, FakeClient(lambda _day: queue.pop(0)), scenario)
+    assert data.today.calories == 1234.0
+    assert (coordinator.consecutive_errors, coordinator.last_error) == (1, "down")
+
+
+def test_after_a_restart_while_fddb_is_down_the_stored_diary_of_today_is_shown(mods):
+    today = mods.coordinator.fddb_today()
+    diary = mods.parser.DiaryDay(
+        day=today,
+        calories=2100.0,
+        balance=85.0,
+        nutrients={"salt": 5.2},
+        meals={"dinner": mods.parser.Meal(950.0, 35.0, 90.0, 55.0, 4)},
+        products=[
+            mods.parser.Product("Pizza", "150 g", 400.0, 10.0, 50.0, 20.0, None, "18:10", "Dinner")
+        ],
+    )
+
+    async def first(coordinator):
+        await coordinator._async_update_data()  # noqa: SLF001
+        return coordinator._data()  # noqa: SLF001
+
+    saved = run(mods, FakeClient(diary), first)
+    assert saved["today"]["day"] == today.isoformat()
+
+    async def second(coordinator):
+        return await coordinator._async_update_data()  # noqa: SLF001
+
+    data = run(
+        mods, FakeClient(mods.parser.FddbConnectionError("down")), second, store=FakeStore(saved)
+    )
+    assert data.today == diary
+
+
+def test_stored_values_of_an_older_day_never_show_up_as_today(mods):
+    today = mods.coordinator.fddb_today()
+    yesterday = today - timedelta(days=1)
+    stored = {
+        "days": {yesterday.isoformat(): {"calories": 2000.0, "products": 3, "final": True}},
+        "today": mods.parser.DiaryDay(day=yesterday, calories=2000.0).as_dict(),
+    }
+
+    async def scenario(coordinator):
+        return await coordinator._async_update_data()  # noqa: SLF001
+
+    data = run(
+        mods, FakeClient(mods.parser.FddbConnectionError("down")), scenario, store=FakeStore(stored)
+    )
+    assert data.today.day == today
+    assert data.today.calories == 0.0
+    assert data.today.products == []
+    assert data.yesterday_calories == 2000.0  # the history itself is still right
+
+
+def test_a_first_setup_without_any_data_still_fails(mods):
+    from homeassistant.helpers.update_coordinator import UpdateFailed
+
+    async def scenario(coordinator):
+        with pytest.raises(UpdateFailed):
+            await coordinator._async_update_data()  # noqa: SLF001
+
+    run(mods, FakeClient(mods.parser.FddbConnectionError("down")), scenario)
+
+
+def test_a_rejected_login_still_fails_even_with_stored_values(mods):
+    from homeassistant.exceptions import ConfigEntryAuthFailed
+
+    today = mods.coordinator.fddb_today()
+    stored = {"today": mods.parser.DiaryDay(day=today, calories=500.0).as_dict()}
+
+    async def scenario(coordinator):
+        with pytest.raises(ConfigEntryAuthFailed):
+            await coordinator._async_update_data()  # noqa: SLF001
+
+    run(
+        mods,
+        FakeClient(mods.parser.FddbAuthError("bad password")),
+        scenario,
+        store=FakeStore(stored),
+    )
+
+
+@pytest.mark.parametrize("stored", [None, "x", {"day": "not a date"}, {"calories": 5}])
+def test_a_damaged_stored_diary_is_ignored(mods, stored):
+    async def scenario(coordinator):
+        return coordinator._last_today  # noqa: SLF001
+
+    assert run(mods, FakeClient(None), scenario, store=FakeStore({"today": stored})) is None

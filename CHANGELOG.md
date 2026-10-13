@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+### Changed
+
+- The sensors keep their last values while fddb.info cannot be reached, also across a restart,
+  instead of becoming `unavailable` (#18). The last diary of today that was read in full is
+  stored and shown; when what is stored is from an older day (for example a restart after
+  midnight while fddb.info is down), today shows the values of a day without entries, never the
+  previous day's numbers. Meanwhile the *Problem* binary sensor is on and its `error` attribute
+  names the reason. A rejected login still starts re-authentication, and a first setup without
+  any stored data still waits until fddb.info answers.
+
 ### Fixed
 
 - The device link ("Visit") now opens `https://fddb.mobi/notepad/` instead of

@@ -777,3 +777,40 @@ def test_meals_are_in_the_get_diary_data(meals_html):
         "protein": 61.0,
         "products": 2,
     }
+
+
+def test_a_stored_diary_is_rebuilt_exactly():
+    diary = parser_module.DiaryDay(
+        day=date(2026, 10, 13),
+        calories=2100.0,
+        fat=50.0,
+        balance=-120.0,
+        goal=2100.0,
+        nutrients={"salt": 5.2, "alcohol": 0.0},
+        meals={"dinner": parser_module.Meal(950.0, 35.0, 90.0, 55.0, 4)},
+        products=[
+            parser_module.Product(
+                "Pizza", "150 g", 400.0, 10.0, 50.0, 20.0, "https://x", "18:10", "Dinner"
+            )
+        ],
+    )
+    assert parser_module.DiaryDay.from_dict(diary.as_dict()) == diary
+
+
+def test_a_damaged_stored_diary_keeps_only_what_is_valid():
+    rebuilt = parser_module.DiaryDay.from_dict(
+        {
+            "day": "2026-10-13",
+            "calories": "lots",
+            "protein": True,
+            "nutrients": {"salt": "x", "fibre": 3},
+            "meals": {"dinner": {"calories": 100, "products": "2"}, "x": 5},
+            "products": [1, {"name": 5}, {"name": "Apple", "calories": 52, "link": 7}],
+        }
+    )
+    assert rebuilt.calories == 0.0 and rebuilt.protein == 0.0
+    assert rebuilt.nutrients == {"fibre": 3.0}
+    assert rebuilt.meals == {"dinner": parser_module.Meal(calories=100.0, products=0)}
+    assert [(p.name, p.calories, p.link) for p in rebuilt.products] == [("Apple", 52.0, None)]
+    assert parser_module.DiaryDay.from_dict({"day": "13.10.2026"}) is None
+    assert parser_module.DiaryDay.from_dict(None) is None

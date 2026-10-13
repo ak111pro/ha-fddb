@@ -87,6 +87,9 @@ class FddbCoordinator(DataUpdateCoordinator[FddbData]):
         )
         # date iso -> {"calories": .., "fat": .., ..., "products": n, "final": bool}
         self._days: dict[str, dict[str, Any]] = {}
+        # The last diary of the current day that was read in full. Stored, so that after a
+        # restart the sensors show it while fddb.info cannot be reached (see ``_fallback``).
+        self._last_today: DiaryDay | None = None
         # Manual goal (number entity); None or 0 means "use the goal from FDDB".
         self.goal: float | None = None
         # Required calories per day as read from the FDDB settings page, None until one was seen.
@@ -117,6 +120,7 @@ class FddbCoordinator(DataUpdateCoordinator[FddbData]):
     async def async_load(self) -> None:
         stored = await self._store.async_load() or {}
         self._days = stored.get("days", {})
+        self._last_today = DiaryDay.from_dict(stored.get("today"))
         self.goal = stored.get("goal")
         self.fddb_goal = stored.get("fddb_goal")
         if stored.get("profile") is not None:
@@ -133,6 +137,7 @@ class FddbCoordinator(DataUpdateCoordinator[FddbData]):
     def _data(self) -> dict[str, Any]:
         return {
             "days": self._days,
+            "today": self._last_today.as_dict() if self._last_today else None,
             "goal": self.goal,
             "fddb_goal": self.fddb_goal,
             "profile": self.profile.as_dict() if self.profile else None,
@@ -228,6 +233,15 @@ class FddbCoordinator(DataUpdateCoordinator[FddbData]):
         started = monotonic()
         try:
             data = await self._async_poll()
+        except UpdateFailed as err:
+            self._record_failure(err, monotonic() - started)
+            fallback = self._fallback()
+            if fallback is None:
+                raise
+            # Keep the sensors at sensible values; the problem sensor reports the error.
+            level = logging.DEBUG if self.consecutive_errors > 1 else logging.WARNING
+            _LOGGER.log(level, "Could not read FDDB, showing the last known values: %s", err)
+            return fallback
         except Exception as err:
             self._record_failure(err, monotonic() - started)
             raise
@@ -250,9 +264,25 @@ class FddbCoordinator(DataUpdateCoordinator[FddbData]):
         self.last_error_time = datetime.now(timezone.utc)
         self._schedule_save()
 
+    def _fallback(self) -> FddbData | None:
+        """What to show while fetching fails, or None to let the update fail.
+
+        Today's last successful read when there is one (also from before a restart). If what is
+        known is from an older day, today counts as a day without entries: yesterday's numbers
+        must never show up as today's. Without anything known at all (first setup) there is no
+        fallback, so the setup is retried until fddb.info answers.
+        """
+        today = fddb_today()
+        if self._last_today is not None and self._last_today.day == today:
+            return self._build(self._last_today)
+        if self._last_today is None and self.data is None and not self._days:
+            return None
+        return self._build(DiaryDay(day=today))
+
     async def _async_poll(self) -> FddbData:
         today = fddb_today()
         diary = await self._fetch(today)
+        self._last_today = diary
         self._remember(diary, final=False)
 
         # Make sure yesterday has its full value once the day has changed.
