@@ -73,9 +73,7 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
             )
         day: date = call.data.get(ATTR_DATE) or fddb_today()
         if day > fddb_today():
-            raise ServiceValidationError(
-                translation_domain=DOMAIN, translation_key="future_date"
-            )
+            raise ServiceValidationError(translation_domain=DOMAIN, translation_key="future_date")
         try:
             diary = await coordinators[0].async_get_day(day)
         except FddbError as err:

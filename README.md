@@ -203,8 +203,9 @@ Parser and day-window tests run without Home Assistant:
 
 ```bash
 python -m venv .venv && . .venv/bin/activate
-pip install -r requirements_test.txt
+pip install -r requirements_test.txt ruff
 pytest
+ruff check . && ruff format --check .
 ```
 
 `tests/test_sensor_entities.py` needs Home Assistant itself and is skipped when it is not

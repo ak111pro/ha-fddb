@@ -145,8 +145,7 @@ class FddbCoordinator(DataUpdateCoordinator[FddbData]):
 
         def total_since(start: date) -> float:
             return sum(
-                calories(start + timedelta(days=i)) or 0.0
-                for i in range((today - start).days + 1)
+                calories(start + timedelta(days=i)) or 0.0 for i in range((today - start).days + 1)
             )
 
         def average(days: int) -> float | None:

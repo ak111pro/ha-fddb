@@ -129,7 +129,8 @@ def test_bad_number_in_nutrient_row_raises_parse_error(normal_html):
 
 def test_footer_with_too_few_cells_raises_parse_error(normal_html):
     html = normal_html.replace(
-        '<tr class="myday-table-std-td-footer">', '<tr class="myday-table-std-td-footer"><td>x</td></tr><tr>'
+        '<tr class="myday-table-std-td-footer">',
+        '<tr class="myday-table-std-td-footer"><td>x</td></tr><tr>',
     )
     # The last row now only has one cell less than required for totals.
     html = html.replace("<td><b>14.1 g</b></td>", "")

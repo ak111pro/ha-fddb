@@ -4,9 +4,8 @@ from __future__ import annotations
 
 from datetime import date
 
-import pytest
-
 from conftest import parser
+import pytest
 
 
 def _day(**values: float) -> parser.DiaryDay:

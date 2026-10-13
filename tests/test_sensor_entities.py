@@ -11,8 +11,8 @@ from datetime import date, datetime, timezone
 import importlib.util
 from pathlib import Path
 import sys
-from zoneinfo import ZoneInfo
 from types import SimpleNamespace
+from zoneinfo import ZoneInfo
 
 import pytest
 
@@ -135,7 +135,9 @@ def test_combination_is_valid_for_home_assistant(sensor_module, key):
     if description.device_class in DEVICE_CLASS_STATE_CLASSES and description.state_class:
         assert description.state_class in DEVICE_CLASS_STATE_CLASSES[description.device_class]
     if description.device_class in DEVICE_CLASS_UNITS:
-        assert description.native_unit_of_measurement in DEVICE_CLASS_UNITS[description.device_class]
+        assert (
+            description.native_unit_of_measurement in DEVICE_CLASS_UNITS[description.device_class]
+        )
 
 
 @pytest.mark.parametrize("key", sorted(EXPECTED))

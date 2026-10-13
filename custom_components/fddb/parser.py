@@ -142,7 +142,9 @@ def _parse_product(cells: list[Tag]) -> Product:
     else:
         # Own foods and recipes have no link to the food database, only plain text.
         text = " ".join(
-            s.strip() for s in first.find_all(string=True) if not (time_span and s.parent is time_span)
+            s.strip()
+            for s in first.find_all(string=True)
+            if not (time_span and s.parent is time_span)
         ).strip()
     if not text:
         raise FddbParseError("Product row without a name")

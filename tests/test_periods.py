@@ -5,6 +5,7 @@ from __future__ import annotations
 from datetime import date, datetime
 
 from conftest import const
+
 from custom_components.fddb import periods
 
 
