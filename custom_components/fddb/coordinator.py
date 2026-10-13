@@ -90,6 +90,7 @@ class FddbCoordinator(DataUpdateCoordinator[FddbData]):
         # Manual goal (number entity); None or 0 means "use the goal from FDDB".
         self.goal: float | None = None
         # Required calories per day as read from the FDDB settings page, None until one was seen.
+        # The fallback for a diary page that does not show the required energy of its day.
         self.fddb_goal: float | None = None
         # Profile values (height, weight, ...) from the same page. Read once at setup and then
         # every PROFILE_REFRESH_INTERVAL; the last known values are kept (and stored) when a
@@ -172,6 +173,7 @@ class FddbCoordinator(DataUpdateCoordinator[FddbData]):
         record = {key: getattr(diary, key) for key in TOTAL_KEYS}
         record["products"] = len(diary.products)
         record["balance"] = diary.balance
+        record["goal"] = diary.goal
         record["final"] = final
         self._days[diary.day.isoformat()] = record
         cutoff = (fddb_today() - timedelta(days=KEEP_DAYS)).isoformat()
@@ -180,17 +182,31 @@ class FddbCoordinator(DataUpdateCoordinator[FddbData]):
         self._schedule_save()
 
     @property
+    def fddb_goal_today(self) -> tuple[float | None, str | None]:
+        """The goal FDDB reports for today, and where it was read.
+
+        The required energy of today's diary page (``"fddb_diary"``) wins; when the page does not
+        show it, the value of the settings page (``"fddb_profile"``) is the fallback.
+        ``(None, None)`` when neither is known.
+        """
+        diary_goal = self.data.today.goal if self.data is not None else None
+        if diary_goal and diary_goal > 0:
+            return diary_goal, "fddb_diary"
+        if self.fddb_goal and self.fddb_goal > 0:
+            return self.fddb_goal, "fddb_profile"
+        return None, None
+
+    @property
     def effective_goal(self) -> tuple[float | None, str | None]:
         """The goal used for progress and remaining calories, and where it comes from.
 
-        The number entity wins when it is above 0 (``"manual"``), otherwise the goal read from
-        FDDB (``"fddb"``). ``(None, None)`` when neither is known.
+        The number entity wins when it is above 0 (``"manual"``), otherwise the goal FDDB reports
+        for today (``"fddb_diary"`` or ``"fddb_profile"``, see ``fddb_goal_today``).
+        ``(None, None)`` when none is known.
         """
         if self.goal and self.goal > 0:
             return self.goal, "manual"
-        if self.fddb_goal and self.fddb_goal > 0:
-            return self.fddb_goal, "fddb"
-        return None, None
+        return self.fddb_goal_today
 
     async def async_set_goal(self, value: float | None) -> None:
         self.goal = value

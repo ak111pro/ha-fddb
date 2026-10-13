@@ -21,6 +21,16 @@
 
 ### Added
 
+- Daily goal from the diary page (#15). The diary page shows the required energy of every day
+  ("Required energy: 8368 kJ (2000 kcal) Required calories per day"); it is now read with every
+  diary request and used as FDDB's goal for that day, stored with each day of the history and
+  in the `goal` key of the `get_diary` response. The value of the settings page (#4) is the
+  fallback for a page without the block. The **effective goal** is therefore: the number entity
+  if above 0, else the diary goal, else the settings page goal. **The `goal_source` attribute
+  of *Goal progress* has new values: `manual`, `fddb_diary` or `fddb_profile`** (the former
+  `fddb` is now `fddb_profile`). *Daily calorie goal (FDDB)* shows the diary goal of today (or
+  the settings page value) and has the same `goal_source` attribute (`fddb_diary` or
+  `fddb_profile`).
 - Energy balance sensors (#14): *Energy balance today* (`balance`) and *Energy balance yesterday*
   (`balance_yesterday`), in kcal, state class `measurement`, no device class (energy does not
   allow `measurement`). They carry FDDB's own *Balance* block of the diary page ("You consumed
@@ -67,7 +77,7 @@
   if kcal is missing). *Calories remaining* and *Goal progress* now use the **effective goal**:
   the number entity *Daily calorie goal* when it is above 0, otherwise the FDDB goal; they are
   only `unknown` when both are missing. *Goal progress* has the attribute `goal_source`
-  (`manual` or `fddb`).
+  (`manual`, `fddb_diary` or `fddb_profile`, see #15).
 - Profile sensors from the FDDB settings page (#10): *Weight* (kg, device class *weight*, state
   class `measurement`), *Body mass index* (state class `measurement`, attribute `category`, for
   example `Normal`), and the diagnostic sensors *Height* (cm, device class *distance*),

@@ -576,3 +576,44 @@ def test_balance_on_a_day_without_a_product_table(meals_html):
 
 def test_balance_is_in_the_get_diary_data(meals_html):
     assert parse_diary(meals_html, DAY).as_dict()["balance"] == 140.0
+
+
+# --- daily goal of the diary page (#15) ------------------------------------------------------
+
+
+def test_required_energy_is_the_goal_of_the_day(meals_html):
+    # "7531 kJ (1800 kcal) Required calories per day"
+    assert parse_diary(meals_html, DAY).goal == 1800.0
+
+
+def test_required_energy_without_kcal_uses_kilojoules(meals_html):
+    html = meals_html.replace("(1800 kcal)", "")
+    assert parse_diary(html, DAY).goal == round(7531 / parser_module.KJ_PER_KCAL)
+
+
+def test_required_energy_with_thousands_separator(meals_html):
+    html = meals_html.replace("(1800 kcal)", "(1,800 kcal)")
+    assert parse_diary(html, DAY).goal == 1800.0
+
+
+@pytest.mark.parametrize("replacement", ["<b>nothing</b>", "<b>0 kJ</b> (0 kcal)", ""])
+def test_unreadable_required_energy_is_none(meals_html, replacement):
+    start = meals_html.index("<b>7531 kJ</b>")
+    end = meals_html.index("<a ", start)
+    assert parse_diary(meals_html[:start] + replacement + meals_html[end:], DAY).goal is None
+
+
+def test_page_without_required_energy_block_has_no_goal(normal, load_fixture):
+    assert normal.goal is None
+    assert parse_diary(load_fixture("diary_empty.html"), DAY).goal is None
+
+
+def test_goal_does_not_depend_on_the_balance_block(meals_html):
+    start = meals_html.index("You consumed")
+    html = meals_html[:start] + meals_html[meals_html.index("</div>", start) :]
+    diary = parse_diary(html, DAY)
+    assert (diary.goal, diary.balance) == (1800.0, None)
+
+
+def test_goal_is_in_the_get_diary_data(meals_html):
+    assert parse_diary(meals_html, DAY).as_dict()["goal"] == 1800.0

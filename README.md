@@ -33,7 +33,7 @@ no public API. Everything is configured in the UI.
 - Yesterday, this week (Monday to today), this month, 7-day and 30-day averages
 - Logging streak (consecutive days with at least one entry)
 - Energy balance of the day as FDDB reports it (surplus positive, deficit negative), also for yesterday
-- Daily calorie goal (read from your FDDB profile, or set by hand) with remaining calories and goal progress
+- Daily calorie goal (the required energy FDDB shows on each diary day, with your FDDB profile as fallback, or set by hand) with remaining calories and goal progress
 - Profile values from FDDB: height, weight, body mass index, occupation, sports, weight goal and activity index
 - Problem sensor that tells you when FDDB could not be read
 - Actions to refresh on demand and to fetch the full diary (all products) of any day
@@ -72,9 +72,9 @@ in English with the German name in parentheses.
 | Average calories 7 days (Durchschnitt Kalorien 7 Tage) | sensor | kcal | Mean of the last 7 days before today, only days with entries |
 | Average calories 30 days (Durchschnitt Kalorien 30 Tage) | sensor | kcal | Same for 30 days |
 | Logging streak (Erfassungsserie) | sensor | d | Consecutive days with entries; today counts once it has entries |
-| Daily calorie goal (FDDB) (Tägliches Kalorienziel (FDDB)) | sensor | kcal | FDDB's *Required calories per day* from your settings page (see [Daily calorie goal](#daily-calorie-goal)); unknown until the profile was read |
+| Daily calorie goal (FDDB) (Tägliches Kalorienziel (FDDB)) | sensor | kcal | FDDB's goal for today: the *Required energy* of today's diary page, else *Required calories per day* from your settings page (see [Daily calorie goal](#daily-calorie-goal)). Attribute `goal_source` is `fddb_diary` or `fddb_profile` (`null` when unknown) |
 | Calories remaining (Verbleibende Kalorien) | sensor | kcal | Effective goal minus today; unknown while there is no goal |
-| Goal progress (Zielerreichung) | sensor | % | Today as percentage of the effective goal. Attribute `goal_source` is `manual` or `fddb` (`null` without a goal) |
+| Goal progress (Zielerreichung) | sensor | % | Today as percentage of the effective goal. Attribute `goal_source` is `manual`, `fddb_diary` or `fddb_profile` (`null` without a goal) |
 | Weight (Gewicht) | sensor | kg | Your weight from the FDDB profile, state class `measurement`, device class *weight* |
 | Body mass index (Body-Mass-Index) | sensor | | BMI from the FDDB profile. Attribute `category` has FDDB's text, for example `Normal` |
 | Height (Körpergröße) | sensor (diagnostic) | cm | From the FDDB profile, device class *distance* |
@@ -152,16 +152,21 @@ If the password changes, Home Assistant asks you to sign in again (re-authentica
 *Calories remaining* and *Goal progress* use an **effective goal**:
 
 1. the number entity *Daily calorie goal*, if it is set to more than 0 (`goal_source: manual`),
-2. otherwise the goal from your FDDB account, shown by the sensor *Daily calorie goal (FDDB)*
-   (`goal_source: fddb`),
-3. otherwise both sensors are `unknown`.
+2. otherwise the goal FDDB reports for today, shown by the sensor *Daily calorie goal (FDDB)*:
+   the **Required energy** block of the diary page of that day (`goal_source: fddb_diary`),
+3. otherwise the value of **Settings > Required calories per day** of your FDDB account
+   (`goal_source: fddb_profile`),
+4. otherwise both sensors are `unknown`.
 
-The FDDB goal is the value of **Settings > Required calories per day** in your FDDB account (the
-"Required" row of the Personal Information table on <https://fddb.info/db/i18n/profile20/>). FDDB
-shows it in kJ and kcal; the integration uses the kcal figure and, if that is missing, converts the
-kJ value (kJ / 4.184). It is read together with the profile (see [Profile](#profile)), not on every
-poll, so a change in FDDB shows up after at most 6 hours (or after a reload of the integration).
-The last value is kept across restarts; if the settings page cannot be read, the old value stays.
+The diary page shows the required energy of every day ("8368 kJ (2000 kcal) Required calories
+per day"), so it is read with the normal diary request and is always the value of that day. It is
+also stored with each day of the history (and is in the `goal` key of the `get_diary` response),
+so a past day keeps the goal it had. The fallback is the settings page value, which is read
+together with the profile (see [Profile](#profile)), not on every poll, so a change in FDDB shows
+up after at most 6 hours (or after a reload of the integration). Both are shown in kJ and kcal by
+FDDB; the integration uses the kcal figure and, if that is missing, converts the kJ value
+(kJ / 4.184). The last settings page value is kept across restarts; if that page cannot be read,
+the old value stays.
 
 Setting the number entity back to 0 switches to the FDDB goal again.
 

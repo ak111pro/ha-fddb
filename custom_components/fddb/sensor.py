@@ -135,7 +135,9 @@ def _kcal_total(
 
 
 def _kcal_measurement(
-    key: str, value_fn: Callable[[FddbData, FddbCoordinator], float | None]
+    key: str,
+    value_fn: Callable[[FddbData, FddbCoordinator], float | None],
+    **kwargs: Any,
 ) -> FddbSensorDescription:
     # Averages, yesterday and the remaining budget are snapshots, not sums that start at zero,
     # so they keep the measurement state class and have no device class.
@@ -145,6 +147,7 @@ def _kcal_measurement(
         state_class=SensorStateClass.MEASUREMENT,
         suggested_display_precision=0,
         value_fn=value_fn,
+        **kwargs,
     )
 
 
@@ -240,9 +243,14 @@ SENSORS: tuple[FddbSensorDescription, ...] = (
         suggested_display_precision=0,
         value_fn=lambda data, _c: data.streak,
     ),
-    # The goal as FDDB reports it. No device class: energy does not allow state class
+    # The goal as FDDB reports it for today: the required energy of the diary page, else the
+    # value of the settings page. No device class: energy does not allow state class
     # measurement, and a goal is a setting rather than an accumulating total.
-    _kcal_measurement("goal_fddb", lambda _data, coordinator: coordinator.fddb_goal),
+    _kcal_measurement(
+        "goal_fddb",
+        lambda _data, coordinator: coordinator.fddb_goal_today[0],
+        attributes_fn=lambda _data, coordinator: {"goal_source": coordinator.fddb_goal_today[1]},
+    ),
     _kcal_measurement("calories_remaining", _remaining),
     FddbSensorDescription(
         key="goal_progress",

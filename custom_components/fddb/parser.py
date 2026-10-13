@@ -76,6 +76,9 @@ class DiaryDay:
     # FDDB's energy balance of the day in kcal: positive = more energy consumed than required
     # (surplus), negative = less (deficit). None when the page has no readable "Balance" block.
     balance: float | None = None
+    # The energy FDDB says you require on this day in kcal ("Required energy" block of the diary
+    # page, what the settings page calls "Required calories per day"); None if not shown.
+    goal: float | None = None
 
     @property
     def has_entries(self) -> bool:
@@ -259,6 +262,20 @@ def _balance_kcal(soup: BeautifulSoup) -> float | None:
     return amount if direction.group(1).lower() == "more" else -amount
 
 
+def _goal_kcal(soup: BeautifulSoup) -> float | None:
+    """The required energy of the day in kcal from the "Required energy" block, else None.
+
+    "8368 kJ (2000 kcal) Required calories per day" is 2000 (kJ / 4.184 if kcal is missing).
+    """
+    text = _summary_text(soup, "required energy")
+    if text is None:
+        return None
+    goal = _required_kcal(text)
+    if goal is None:
+        _LOGGER.debug("Diary required energy block not readable")
+    return goal
+
+
 def _bread_units(carbs_cell: Tag, carbs: float) -> float:
     """Bread units of the day: as shown next to the carbohydrate total, else carbs / 12 g."""
     match = _BREAD_UNITS.search(carbs_cell.get_text(" ", strip=True))
@@ -344,14 +361,15 @@ def _parse_diary(html: str, day: date) -> DiaryDay:
         raise FddbAuthError("Not logged in")
 
     balance = _balance_kcal(soup)
+    goal = _goal_kcal(soup)
 
     table = soup.select_one("table.myday-table-std")
     if table is None:
-        return DiaryDay(day=day, balance=balance)
+        return DiaryDay(day=day, balance=balance, goal=goal)
 
     rows = [r for r in table.find_all("tr") if r.find_all("td", recursive=False)]
     if not rows:
-        return DiaryDay(day=day, balance=balance)
+        return DiaryDay(day=day, balance=balance, goal=goal)
 
     footer, product_rows = rows[-1], rows[:-1]
     footer_cells = footer.find_all("td", recursive=False)
@@ -379,6 +397,7 @@ def _parse_diary(html: str, day: date) -> DiaryDay:
         products=products,
         nutrients=nutrients,
         balance=balance,
+        goal=goal,
     )
 
 

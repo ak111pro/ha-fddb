@@ -54,6 +54,7 @@ def _make_sensor(
     class FakeCoordinator(SimpleNamespace):
         # Use the real override logic, not a copy of it.
         effective_goal = coordinator_module.FddbCoordinator.effective_goal
+        fddb_goal_today = coordinator_module.FddbCoordinator.fddb_goal_today
 
     coordinator = FakeCoordinator(
         data=data,
@@ -90,6 +91,7 @@ def test_other_sensors_have_no_extra_attributes(sensor_module, load_fixture):
         if description.key in (
             "calories",
             "goal_progress",
+            "goal_fddb",
             "consecutive_errors",
             "bmi",
             "occupation",
@@ -227,8 +229,8 @@ def test_last_reset(sensor_module, load_fixture, key):
         (None, None, None, None, None),
         (0, None, None, None, None),
         (2000, None, "manual", 1637.0, 18.1),
-        (None, 2400, "fddb", 2037.0, 15.1),
-        (0, 2400, "fddb", 2037.0, 15.1),
+        (None, 2400, "fddb_profile", 2037.0, 15.1),
+        (0, 2400, "fddb_profile", 2037.0, 15.1),
         (2000, 2400, "manual", 1637.0, 18.1),  # the number entity wins when above 0
     ],
 )
@@ -249,6 +251,38 @@ def test_fddb_goal_sensor_reports_the_goal_from_fddb(sensor_module, load_fixture
     sensor = _make_sensor(sensor_module, "goal_fddb", load_fixture, goal=1800, fddb_goal=2400)
     assert sensor.native_value == 2400  # independent of the manual goal
     assert _make_sensor(sensor_module, "goal_fddb", load_fixture).native_value is None
+    assert sensor.extra_state_attributes == {"goal_source": "fddb_profile"}
+
+
+# --- daily goal from the diary page (#15) ----------------------------------------------------
+# diary_meals.html shows a required energy of 1800 kcal and 1940 kcal consumed.
+
+
+def test_goal_of_the_diary_page_wins_over_the_profile(sensor_module, load_fixture):
+    def make(key, **kwargs):
+        return _make_sensor(sensor_module, key, load_fixture, diary="diary_meals.html", **kwargs)
+
+    goal = make("goal_fddb", fddb_goal=2400)
+    assert goal.native_value == 1800
+    assert goal.extra_state_attributes == {"goal_source": "fddb_diary"}
+    assert make("calories_remaining", fddb_goal=2400).native_value == -140.0
+    progress = make("goal_progress", fddb_goal=2400)
+    assert progress.native_value == 107.8
+    assert progress.extra_state_attributes == {"goal_source": "fddb_diary"}
+    # The diary goal is there even without a profile
+    assert make("goal_fddb", profile=None).native_value == 1800
+
+
+def test_manual_goal_still_wins_over_the_diary_goal(sensor_module, load_fixture):
+    kwargs = {"diary": "diary_meals.html", "goal": 2200, "fddb_goal": 2400}
+    progress = _make_sensor(sensor_module, "goal_progress", load_fixture, **kwargs)
+    assert progress.extra_state_attributes == {"goal_source": "manual"}
+    assert (
+        _make_sensor(sensor_module, "calories_remaining", load_fixture, **kwargs).native_value
+        == 260
+    )
+    # ... and the FDDB goal sensor stays independent of it
+    assert _make_sensor(sensor_module, "goal_fddb", load_fixture, **kwargs).native_value == 1800
 
 
 # --- diagnostics (#11) -----------------------------------------------------------------------

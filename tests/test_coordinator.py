@@ -173,7 +173,7 @@ def test_goal_comes_from_the_profile(mods):
     client = FakeClient(lambda day: _diary(mods, day), profile=_profile(mods))
     coordinator, stored = run(mods, client, scenario)
     assert coordinator.fddb_goal == 2000.0
-    assert coordinator.effective_goal == (2000.0, "fddb")
+    assert coordinator.effective_goal == (2000.0, "fddb_profile")
     assert stored["fddb_goal"] == 2000.0
     assert stored["profile"]["height_cm"] == 172.0
     assert stored["profile_updated"] is not None
@@ -203,8 +203,8 @@ def test_stored_goal_is_loaded(mods):
         (None, None, (None, None)),
         (0, None, (None, None)),
         (1800.0, None, (1800.0, "manual")),
-        (None, 2400.0, (2400.0, "fddb")),
-        (0, 2400.0, (2400.0, "fddb")),
+        (None, 2400.0, (2400.0, "fddb_profile")),
+        (0, 2400.0, (2400.0, "fddb_profile")),
         (1800.0, 2400.0, (1800.0, "manual")),
         (None, 0, (None, None)),
     ],
@@ -519,3 +519,59 @@ def test_a_stored_day_from_an_older_version_has_no_balance(mods):
     data = run(mods, FakeClient(None), scenario, store=store)
     assert data.yesterday_calories == 1500.0
     assert data.yesterday_balance is None
+
+
+# --- daily goal from the diary page (#15) --------------------------------------------------
+
+
+def _with_goal(mods, day, goal, calories=100.0):
+    diary = _diary(mods, day, calories)
+    diary.goal = goal
+    return diary
+
+
+def test_goal_of_the_diary_page_beats_the_profile_and_is_stored_per_day(mods):
+    today = mods.coordinator.fddb_today()
+
+    async def scenario(coordinator):
+        coordinator.data = await coordinator._async_update_data()  # noqa: SLF001
+        return coordinator
+
+    client = FakeClient(
+        lambda day: _with_goal(mods, day, 1800.0), profile=_profile(mods, calorie_goal=2400.0)
+    )
+    coordinator = run(mods, client, scenario)
+    assert coordinator.fddb_goal == 2400.0  # the profile value is kept as the fallback
+    assert coordinator.fddb_goal_today == (1800.0, "fddb_diary")
+    assert coordinator.effective_goal == (1800.0, "fddb_diary")
+    assert coordinator._days[today.isoformat()]["goal"] == 1800.0  # noqa: SLF001
+
+
+def test_profile_goal_is_the_fallback_for_a_page_without_the_block(mods):
+    async def scenario(coordinator):
+        coordinator.data = await coordinator._async_update_data()  # noqa: SLF001
+        return coordinator
+
+    client = FakeClient(
+        lambda day: _with_goal(mods, day, None), profile=_profile(mods, calorie_goal=2400.0)
+    )
+    coordinator = run(mods, client, scenario)
+    assert coordinator.effective_goal == (2400.0, "fddb_profile")
+
+
+def test_a_manual_goal_beats_the_diary_goal(mods):
+    async def scenario(coordinator):
+        coordinator.goal = 1500.0
+        coordinator.data = await coordinator._async_update_data()  # noqa: SLF001
+        return coordinator.effective_goal
+
+    client = FakeClient(lambda day: _with_goal(mods, day, 1800.0))
+    assert run(mods, client, scenario) == (1500.0, "manual")
+
+
+def test_no_goal_anywhere(mods):
+    async def scenario(coordinator):
+        coordinator.data = await coordinator._async_update_data()  # noqa: SLF001
+        return coordinator.effective_goal
+
+    assert run(mods, FakeClient(lambda day: _with_goal(mods, day, None)), scenario) == (None, None)
