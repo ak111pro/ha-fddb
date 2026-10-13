@@ -11,6 +11,10 @@ BASE_URL = "https://fddb.info"
 LOGIN_URL = f"{BASE_URL}/db/i18n/account/?lang=de&action=login"
 # The diary is always requested in English: the parser relies on the English labels.
 DIARY_URL = f"{BASE_URL}/db/i18n/myday20/?lang=en&p={{start}}&q={{end}}"
+# Where the user opens their diary in a browser (device "Visit" link). The desktop diary page
+# (myday20) answers with an error page unless the browser is logged in; the mobile notepad
+# redirects to the login page instead and shows the diary after signing in.
+DIARY_WEB_URL = "https://fddb.mobi/notepad/"
 SESSION_COOKIE = "fddb"
 
 # FDDB diary days follow German local time, whatever the Home Assistant time zone is.

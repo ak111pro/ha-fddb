@@ -5,7 +5,7 @@ from __future__ import annotations
 from homeassistant.helpers.device_registry import DeviceEntryType, DeviceInfo
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
-from .const import BASE_URL, DOMAIN
+from .const import DIARY_WEB_URL, DOMAIN
 from .coordinator import FddbCoordinator
 
 
@@ -25,5 +25,5 @@ class FddbEntity(CoordinatorEntity[FddbCoordinator]):
             manufacturer="FDDB",
             model="Food diary",
             entry_type=DeviceEntryType.SERVICE,
-            configuration_url=f"{BASE_URL}/db/i18n/myday20/",
+            configuration_url=DIARY_WEB_URL,
         )
