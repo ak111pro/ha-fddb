@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from datetime import date
+import re
 
 import pytest
 
@@ -211,3 +212,50 @@ def test_totals_are_found_by_label_not_by_position(normal_html):
     diary = parse_diary(shifted, date(2026, 10, 7))
     assert diary.sugar == 31.4
     assert diary.fibre == 6.2
+
+
+# --- daily calorie goal (#4) ---------------------------------------------------------------
+# ASSUMPTION: no saved FDDB page contains a goal, so the markup below is INVENTED. It only tests
+# the reading logic (label lookup in a two-cell row, positive values only); the real label and
+# position still have to be confirmed against a real page, see parser.GOAL_LABEL.
+
+ASSUMED_GOAL_LABEL = re.compile(r"daily\s+goal", re.IGNORECASE)  # ASSUMPTION, invented label
+
+
+def _with_assumed_goal_row(html: str, value: str) -> str:
+    row = f"<tr><td>Daily goal</td><td><span>{value}</span></td></tr>"
+    return html.replace(
+        '<div class="nutrients">\n  <table>', f'<div class="nutrients">\n  <table>{row}'
+    )
+
+
+def test_goal_is_not_read_while_the_real_label_is_unknown(normal_html):
+    assert parser_module.GOAL_LABEL is None
+    assert parse_diary(_with_assumed_goal_row(normal_html, "2,400 kcal"), DAY).calorie_goal is None
+
+
+def test_goal_row_is_read_when_a_label_is_given(normal_html):
+    html = _with_assumed_goal_row(normal_html, "2,400 kcal")
+    assert parse_diary(html, DAY, ASSUMED_GOAL_LABEL).calorie_goal == 2400.0
+
+
+@pytest.mark.parametrize("value", ["0 kcal", "n/a", ""])
+def test_zero_or_unreadable_goal_means_no_goal(normal_html, value):
+    html = _with_assumed_goal_row(normal_html, value)
+    assert parse_diary(html, DAY, ASSUMED_GOAL_LABEL).calorie_goal is None
+
+
+def test_missing_goal_row_means_no_goal(normal_html):
+    assert parse_diary(normal_html, DAY, ASSUMED_GOAL_LABEL).calorie_goal is None
+
+
+def test_goal_is_read_on_a_day_without_entries(load_fixture):
+    html = load_fixture("diary_empty.html").replace(
+        "</body>", "<table><tr><td>Daily goal</td><td>2000 kcal</td></tr></table></body>"
+    )
+    assert parse_diary(html, DAY, ASSUMED_GOAL_LABEL).calorie_goal == 2000.0
+
+
+def test_goal_does_not_change_the_action_response(normal_html):
+    html = _with_assumed_goal_row(normal_html, "2,400 kcal")
+    assert "calorie_goal" not in parse_diary(html, DAY, ASSUMED_GOAL_LABEL).as_dict()

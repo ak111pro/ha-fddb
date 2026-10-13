@@ -29,7 +29,7 @@ no public API. Everything is configured in the UI.
 - Macro shares of today's energy (protein, carbohydrates, fat)
 - Yesterday, this week (Monday to today), this month, 7-day and 30-day averages
 - Logging streak (consecutive days with at least one entry)
-- Daily calorie goal with remaining calories and goal progress
+- Daily calorie goal (from FDDB, or set by hand) with remaining calories and goal progress
 - Problem sensor that tells you when FDDB could not be read
 - Actions to refresh on demand and to fetch the full diary (all products) of any day
 - English and German translations, diagnostics download with credentials redacted
@@ -58,10 +58,11 @@ in English with the German name in parentheses.
 | Average calories 7 days (Durchschnitt Kalorien 7 Tage) | sensor | kcal | Mean of the last 7 days before today, only days with entries |
 | Average calories 30 days (Durchschnitt Kalorien 30 Tage) | sensor | kcal | Same for 30 days |
 | Logging streak (Erfassungsserie) | sensor | d | Consecutive days with entries; today counts once it has entries |
-| Calories remaining (Verbleibende Kalorien) | sensor | kcal | Goal minus today; unknown while no goal is set |
-| Goal progress (Zielerreichung) | sensor | % | Today as percentage of the goal |
+| Daily calorie goal (FDDB) (Tägliches Kalorienziel (FDDB)) | sensor | kcal | The goal read from your FDDB account; unknown while FDDB shows none (see [Daily calorie goal](#daily-calorie-goal)) |
+| Calories remaining (Verbleibende Kalorien) | sensor | kcal | Effective goal minus today; unknown while there is no goal |
+| Goal progress (Zielerreichung) | sensor | % | Today as percentage of the effective goal. Attribute `goal_source` is `manual` or `fddb` (`null` without a goal) |
 | Last update (Letzte Aktualisierung) | sensor (diagnostic) | | Time of the last successful read |
-| Daily calorie goal (Tägliches Kalorienziel) | number (config) | kcal | 0 = no goal. Stored by the integration |
+| Daily calorie goal (Tägliches Kalorienziel) | number (config) | kcal | Optional override of the FDDB goal; 0 = use the FDDB goal. Stored by the integration |
 | Problem (Problem) | binary sensor (diagnostic) | | On when the last update failed; attribute `error` has the reason |
 
 Daily values (calories, macros, number of products) use state class `total` with
@@ -87,7 +88,8 @@ Requires Home Assistant 2025.8.0 or newer.
 
 1. Go to **Settings > Devices & services > Add integration** and search for **FDDB**.
 2. Enter your fddb.info user name (or e-mail) and password. The login is tested right away.
-3. Optional: set a daily calorie goal through the number entity *Daily calorie goal*.
+3. Optional: override the daily calorie goal through the number entity *Daily calorie goal*
+   (see [Daily calorie goal](#daily-calorie-goal)).
 
 **Options** (integration card > Configure):
 
@@ -96,6 +98,26 @@ Requires Home Assistant 2025.8.0 or newer.
 | Update interval | 30 min | 10 to 1440 min | How often today's diary is read |
 
 If the password changes, Home Assistant asks you to sign in again (re-authentication).
+
+## Daily calorie goal
+
+*Calories remaining* and *Goal progress* use an **effective goal**:
+
+1. the number entity *Daily calorie goal*, if it is set to more than 0 (`goal_source: manual`),
+2. otherwise the goal from your FDDB account, shown by the sensor *Daily calorie goal (FDDB)*
+   (`goal_source: fddb`),
+3. otherwise both sensors are `unknown`.
+
+The FDDB goal is read from today's diary page on every poll; a page that does not show a goal
+keeps the last known value (also across restarts). Setting the number back to 0 switches to the
+FDDB goal again.
+
+> [!NOTE]
+> **Reading the goal from FDDB is not active yet.** None of the diary pages the parser was
+> checked against shows a goal, so the place where FDDB displays it could not be confirmed and
+> the integration deliberately does not guess. Until that is confirmed, *Daily calorie goal
+> (FDDB)* stays `unknown` and only the number entity provides a goal (the override logic
+> itself is in place and tested). See issue #4.
 
 ## Actions
 
@@ -178,7 +200,7 @@ calculated in that time zone. The week starts on Monday. Yesterday is read once 
 - Right after setup, the previous **31 days** are fetched once in the background (one
   request every 1.5 seconds) so averages, week and month sums have data immediately.
 - History is kept for **400 days**.
-- The calorie goal is stored there too. Removing the integration removes this data.
+- The calorie goal (the number entity and the last goal read from FDDB) is stored there too. Removing the integration removes this data.
 
 ## Limitations
 

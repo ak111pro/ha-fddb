@@ -38,7 +38,7 @@ class FddbSensorDescription(SensorEntityDescription):
     """Describes an FDDB sensor."""
 
     value_fn: Callable[[FddbData, FddbCoordinator], float | int | datetime | None]
-    attributes_fn: Callable[[FddbData], dict[str, Any]] | None = None
+    attributes_fn: Callable[[FddbData, FddbCoordinator], dict[str, Any]] | None = None
     # Only for state class TOTAL: the moment the value started counting from zero.
     last_reset_fn: Callable[[date], datetime] | None = None
 
@@ -93,15 +93,17 @@ def _kcal_measurement(
 
 
 def _remaining(data: FddbData, coordinator: FddbCoordinator) -> float | None:
-    if not coordinator.goal:
+    goal, _source = coordinator.effective_goal
+    if not goal:
         return None
-    return round(coordinator.goal - data.today.calories, 1)
+    return round(goal - data.today.calories, 1)
 
 
 def _goal_percent(data: FddbData, coordinator: FddbCoordinator) -> float | None:
-    if not coordinator.goal:
+    goal, _source = coordinator.effective_goal
+    if not goal:
         return None
-    return round(data.today.calories / coordinator.goal * 100, 1)
+    return round(data.today.calories / goal * 100, 1)
 
 
 SENSORS: tuple[FddbSensorDescription, ...] = (
@@ -109,7 +111,7 @@ SENSORS: tuple[FddbSensorDescription, ...] = (
         "calories",
         lambda data, _c: data.today.calories,
         day_start,
-        attributes_fn=lambda data: {"products": data.today.product_attributes()},
+        attributes_fn=lambda data, _c: {"products": data.today.product_attributes()},
     ),
     _grams("fat"),
     _grams("carbs"),
@@ -145,6 +147,9 @@ SENSORS: tuple[FddbSensorDescription, ...] = (
         suggested_display_precision=0,
         value_fn=lambda data, _c: data.streak,
     ),
+    # The goal as FDDB reports it. No device class: energy does not allow state class
+    # measurement, and a goal is a setting rather than an accumulating total.
+    _kcal_measurement("goal_fddb", lambda _data, coordinator: coordinator.fddb_goal),
     _kcal_measurement("calories_remaining", _remaining),
     FddbSensorDescription(
         key="goal_progress",
@@ -152,6 +157,7 @@ SENSORS: tuple[FddbSensorDescription, ...] = (
         state_class=SensorStateClass.MEASUREMENT,
         suggested_display_precision=0,
         value_fn=_goal_percent,
+        attributes_fn=lambda _data, coordinator: {"goal_source": coordinator.effective_goal[1]},
     ),
     FddbSensorDescription(
         key="last_update",
@@ -192,7 +198,7 @@ class FddbSensor(FddbEntity, SensorEntity):
     def extra_state_attributes(self) -> dict[str, Any] | None:
         if (attributes_fn := self.entity_description.attributes_fn) is None:
             return None
-        return attributes_fn(self.coordinator.data)
+        return attributes_fn(self.coordinator.data, self.coordinator)
 
     @property
     def last_reset(self) -> datetime | None:

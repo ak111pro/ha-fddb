@@ -143,3 +143,56 @@ def test_backfill_completes_when_every_day_works(mods, monkeypatch):
     coordinator = run(mods, FakeClient(lambda day: _diary(mods, day)), scenario)
     assert coordinator._backfilled is True  # noqa: SLF001
     assert len(coordinator._days) == mods.coordinator.BACKFILL_DAYS  # noqa: SLF001
+
+
+# --- daily calorie goal (#4) ---------------------------------------------------------------
+
+
+def test_poll_remembers_the_goal_from_fddb_and_keeps_it(mods):
+    today = mods.coordinator.fddb_today()
+    answers = [
+        mods.parser.DiaryDay(day=today, calorie_goal=2400.0),
+        mods.parser.DiaryDay(day=today),  # a page that shows no goal keeps the last known one
+        mods.parser.DiaryDay(day=today, calorie_goal=2200.0),
+    ]
+
+    async def scenario(coordinator):
+        seen = []
+        for _ in range(3):
+            await coordinator._async_update_data()  # noqa: SLF001
+            seen.append(coordinator.fddb_goal)
+        return seen, coordinator._data()  # noqa: SLF001
+
+    client = FakeClient(lambda day: answers.pop(0) if day == today else _diary(mods, day))
+    seen, stored = run(mods, client, scenario)
+    assert seen == [2400.0, 2400.0, 2200.0]
+    assert stored["fddb_goal"] == 2200.0
+
+
+def test_stored_goal_is_loaded(mods):
+    async def scenario(coordinator):
+        return coordinator.fddb_goal, coordinator.goal
+
+    store = FakeStore({"fddb_goal": 2100.0, "goal": 1900.0})
+    assert run(mods, FakeClient(None), scenario, store=store) == (2100.0, 1900.0)
+
+
+@pytest.mark.parametrize(
+    ("manual", "fddb", "expected"),
+    [
+        (None, None, (None, None)),
+        (0, None, (None, None)),
+        (1800.0, None, (1800.0, "manual")),
+        (None, 2400.0, (2400.0, "fddb")),
+        (0, 2400.0, (2400.0, "fddb")),
+        (1800.0, 2400.0, (1800.0, "manual")),
+        (None, 0, (None, None)),
+    ],
+)
+def test_effective_goal(mods, manual, fddb, expected):
+    async def scenario(coordinator):
+        coordinator.goal = manual
+        coordinator.fddb_goal = fddb
+        return coordinator.effective_goal
+
+    assert run(mods, FakeClient(None), scenario) == expected

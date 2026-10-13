@@ -93,6 +93,9 @@
       "calories_remaining": {
         "name": "Calories remaining"
       },
+      "goal_fddb": {
+        "name": "Daily calorie goal (FDDB)"
+      },
       "goal_progress": {
         "name": "Goal progress"
       },

@@ -26,7 +26,7 @@ def sensor_module(fddb_ha):
 DAY = date(2026, 10, 7)
 
 
-def _make_sensor(sensor_module, key, load_fixture, goal=None):
+def _make_sensor(sensor_module, key, load_fixture, goal=None, fddb_goal=None):
     parser = sys.modules["fddb_under_test.parser"]
     today = parser.parse_diary(load_fixture("diary_normal.html"), DAY)
     data = SimpleNamespace(
@@ -39,9 +39,16 @@ def _make_sensor(sensor_module, key, load_fixture, goal=None):
         streak=3,
         last_update=datetime(2026, 10, 7, 12, 0, tzinfo=timezone.utc),
     )
-    coordinator = SimpleNamespace(
+    coordinator_module = sys.modules["fddb_under_test.coordinator"]
+
+    class FakeCoordinator(SimpleNamespace):
+        # Use the real override logic, not a copy of it.
+        effective_goal = coordinator_module.FddbCoordinator.effective_goal
+
+    coordinator = FakeCoordinator(
         data=data,
         goal=goal,
+        fddb_goal=fddb_goal,
         config_entry=SimpleNamespace(unique_id="user", entry_id="abc", title="user"),
         last_update_success=True,
     )
@@ -62,7 +69,7 @@ def test_products_attribute_is_not_recorded(sensor_module):
 
 def test_other_sensors_have_no_extra_attributes(sensor_module, load_fixture):
     for description in sensor_module.SENSORS:
-        if description.key == "calories":
+        if description.key in ("calories", "goal_progress"):
             continue
         sensor = _make_sensor(sensor_module, description.key, load_fixture)
         assert not sensor.extra_state_attributes, description.key
@@ -93,6 +100,7 @@ EXPECTED = {
     "calories_avg_7d": (None, "measurement", "kcal", None, 0),
     "calories_avg_30d": (None, "measurement", "kcal", None, 0),
     "streak": (None, "measurement", "d", None, 0),
+    "goal_fddb": (None, "measurement", "kcal", None, 0),
     "calories_remaining": (None, "measurement", "kcal", None, 0),
     "goal_progress": (None, "measurement", "%", None, 0),
     "last_update": ("timestamp", None, None, None, None),
@@ -142,3 +150,36 @@ def test_last_reset(sensor_module, load_fixture, key):
     assert sensor.last_reset == expected
     # last_reset is only valid together with state class total
     assert (sensor.last_reset is not None) == (sensor.state_class == "total")
+
+
+# today's calories in diary_normal.html: 363 kcal
+
+
+@pytest.mark.parametrize(
+    ("goal", "fddb_goal", "source", "remaining", "progress"),
+    [
+        (None, None, None, None, None),
+        (0, None, None, None, None),
+        (2000, None, "manual", 1637.0, 18.1),
+        (None, 2400, "fddb", 2037.0, 15.1),
+        (0, 2400, "fddb", 2037.0, 15.1),
+        (2000, 2400, "manual", 1637.0, 18.1),  # the number entity wins when above 0
+    ],
+)
+def test_goal_override_logic(
+    sensor_module, load_fixture, goal, fddb_goal, source, remaining, progress
+):
+    def state(key):
+        sensor = _make_sensor(sensor_module, key, load_fixture, goal=goal, fddb_goal=fddb_goal)
+        return sensor.native_value, sensor.extra_state_attributes
+
+    assert state("calories_remaining")[0] == remaining
+    value, attributes = state("goal_progress")
+    assert value == progress
+    assert attributes == {"goal_source": source}
+
+
+def test_fddb_goal_sensor_reports_the_goal_from_fddb(sensor_module, load_fixture):
+    sensor = _make_sensor(sensor_module, "goal_fddb", load_fixture, goal=1800, fddb_goal=2400)
+    assert sensor.native_value == 2400  # independent of the manual goal
+    assert _make_sensor(sensor_module, "goal_fddb", load_fixture).native_value is None

@@ -10,7 +10,6 @@
   diary after signing in (#5).
 - The protein, carbohydrate and fat share sensors report `0` % on days without entries instead of
   `unknown` (#6).
-
 - The diary window now ends one second before the next day's start instead of exactly 24 hours
   after its own start. On the two days a year when the clocks change (23 or 25 hours long) the
   old window left a one-hour gap or overlap with the neighbouring day (taken over from
@@ -26,6 +25,14 @@
   (`name`, `amount`, `calories`, `fat`, `carbs`, `protein`, `link`; `link` is the relative FDDB
   path, `null` for own foods and recipes). The attribute is excluded from the recorder, so it
   never counts against the 16 KB attribute limit and does not grow the database (#3).
+- Daily calorie goal from FDDB (#4). There is a new sensor *Daily calorie goal (FDDB)*
+  (`sensor.<user>_daily_calorie_goal_fddb`, kcal, state class `measurement`, no device class).
+  *Calories remaining* and *Goal progress* now use the **effective goal**: the number entity
+  *Daily calorie goal* when it is above 0, otherwise the FDDB goal; they are only `unknown`
+  when both are missing. *Goal progress* has the attribute `goal_source` (`manual` or `fddb`).
+  **Not active yet:** no saved FDDB page shows the goal, so the parser does not read it
+  (`parser.GOAL_LABEL` is `None`) until the real location is confirmed; the sensor stays
+  `unknown` and nothing changes for users who set the number entity.
 
 ### Changed
 

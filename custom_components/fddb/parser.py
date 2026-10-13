@@ -67,6 +67,10 @@ class DiaryDay:
     protein: float = 0.0
     fibre: float = 0.0
     products: list[Product] = field(default_factory=list)
+    # The daily calorie goal the page shows, or None when the page has none (or the integration
+    # cannot read it yet, see GOAL_LABEL). Kept out of as_dict(): it is account state, not a
+    # property of the day, and the get_diary action response should stay unchanged.
+    calorie_goal: float | None = None
 
     @property
     def has_entries(self) -> bool:
@@ -87,6 +91,7 @@ class DiaryDay:
 
     def as_dict(self, with_products: bool = True) -> dict:
         data = asdict(self)
+        data.pop("calorie_goal")
         data["day"] = self.day.isoformat()
         if not with_products:
             data.pop("products")
@@ -99,6 +104,16 @@ _AMOUNT = re.compile(r"^(\d[\d.,/]*\s+\S+)\s+(.+)$")
 _SUGAR = re.compile(r"thereof\s+sugar", re.IGNORECASE)
 _FIBRE = re.compile(r"dietary\s+fib(re|er)", re.IGNORECASE)
 _LOGIN_TEXTS = {"login", "anmelden"}
+
+# Label of the row (in the English diary page) that holds the daily calorie goal.
+#
+# ASSUMPTION / NOT CONFIRMED: none of the saved diary pages (the synthetic fixtures here and the
+# real pages in itobey/fddb-exporter's tests) contains a goal anywhere, so the real label and
+# position are unknown. Until a real page that shows the goal is available this stays None and
+# the goal is never read; the rest of the goal handling (override logic, sensor) is in place and
+# tested with synthetic HTML. To enable it, set this to a ``re.Pattern`` that matches the whole
+# text of the first cell of the goal row, e.g. ``re.compile(r"daily\s+goal", re.IGNORECASE)``.
+GOAL_LABEL: re.Pattern[str] | None = None
 
 
 def _number(text: str) -> float:
@@ -170,7 +185,21 @@ def _labelled_value(soup: BeautifulSoup, label: re.Pattern[str]) -> float:
     raise FddbParseError(f"Row {label.pattern!r} not found")
 
 
-def parse_diary(html: str, day: date) -> DiaryDay:
+def _calorie_goal(soup: BeautifulSoup, label: re.Pattern[str] | None) -> float | None:
+    """The daily calorie goal from the row with ``label``, None if unknown or not shown.
+
+    A goal is only a goal if it is positive; "0" or an unreadable value means "no goal".
+    """
+    if label is None:
+        return None
+    try:
+        value = _labelled_value(soup, label)
+    except FddbParseError:
+        return None
+    return value if value > 0 else None
+
+
+def parse_diary(html: str, day: date, goal_label: re.Pattern[str] | None = None) -> DiaryDay:
     """Parse a diary page. Returns an empty DiaryDay if nothing was logged that day.
 
     Only ``FddbError`` subclasses escape: an unexpected failure inside the parser (a changed page
@@ -178,25 +207,27 @@ def parse_diary(html: str, day: date) -> DiaryDay:
     like any other "website changed" problem instead of crashing.
     """
     try:
-        return _parse_diary(html, day)
+        return _parse_diary(html, day, GOAL_LABEL if goal_label is None else goal_label)
     except FddbError:
         raise
     except Exception as err:
         raise FddbParseError(f"Could not parse the diary page: {err!r}") from err
 
 
-def _parse_diary(html: str, day: date) -> DiaryDay:
+def _parse_diary(html: str, day: date, goal_label: re.Pattern[str] | None) -> DiaryDay:
     soup = BeautifulSoup(html, "html.parser")
     if is_logged_out(soup):
         raise FddbAuthError("Not logged in")
 
+    goal = _calorie_goal(soup, goal_label)
+
     table = soup.select_one("table.myday-table-std")
     if table is None:
-        return DiaryDay(day=day)
+        return DiaryDay(day=day, calorie_goal=goal)
 
     rows = [r for r in table.find_all("tr") if r.find_all("td", recursive=False)]
     if not rows:
-        return DiaryDay(day=day)
+        return DiaryDay(day=day, calorie_goal=goal)
 
     footer, product_rows = rows[-1], rows[:-1]
     footer_cells = footer.find_all("td", recursive=False)
@@ -219,4 +250,5 @@ def _parse_diary(html: str, day: date) -> DiaryDay:
         sugar=_labelled_value(soup, _SUGAR),
         fibre=_labelled_value(soup, _FIBRE),
         products=products,
+        calorie_goal=goal,
     )

@@ -72,7 +72,10 @@ class FddbCoordinator(DataUpdateCoordinator[FddbData]):
         )
         # date iso -> {"calories": .., "fat": .., ..., "products": n, "final": bool}
         self._days: dict[str, dict[str, Any]] = {}
+        # Manual goal (number entity); None or 0 means "use the goal from FDDB".
         self.goal: float | None = None
+        # Last daily calorie goal read from the FDDB diary page, None until one was seen.
+        self.fddb_goal: float | None = None
         self._backfilled = False
         self._unsub_finalize = None
 
@@ -82,10 +85,16 @@ class FddbCoordinator(DataUpdateCoordinator[FddbData]):
         stored = await self._store.async_load() or {}
         self._days = stored.get("days", {})
         self.goal = stored.get("goal")
+        self.fddb_goal = stored.get("fddb_goal")
         self._backfilled = stored.get("backfilled", False)
 
     def _data(self) -> dict[str, Any]:
-        return {"days": self._days, "goal": self.goal, "backfilled": self._backfilled}
+        return {
+            "days": self._days,
+            "goal": self.goal,
+            "fddb_goal": self.fddb_goal,
+            "backfilled": self._backfilled,
+        }
 
     @callback
     def _schedule_save(self) -> None:
@@ -104,6 +113,19 @@ class FddbCoordinator(DataUpdateCoordinator[FddbData]):
         for key in [k for k in self._days if k < cutoff]:
             del self._days[key]
         self._schedule_save()
+
+    @property
+    def effective_goal(self) -> tuple[float | None, str | None]:
+        """The goal used for progress and remaining calories, and where it comes from.
+
+        The number entity wins when it is above 0 (``"manual"``), otherwise the goal read from
+        FDDB (``"fddb"``). ``(None, None)`` when neither is known.
+        """
+        if self.goal and self.goal > 0:
+            return self.goal, "manual"
+        if self.fddb_goal and self.fddb_goal > 0:
+            return self.fddb_goal, "fddb"
+        return None, None
 
     async def async_set_goal(self, value: float | None) -> None:
         self.goal = value
@@ -124,6 +146,11 @@ class FddbCoordinator(DataUpdateCoordinator[FddbData]):
         today = fddb_today()
         diary = await self._fetch(today)
         self._remember(diary, final=False)
+        # Only today's page counts, and a page without a goal keeps the last known one: an empty
+        # diary day may not show it at all.
+        if diary.calorie_goal is not None and diary.calorie_goal != self.fddb_goal:
+            self.fddb_goal = diary.calorie_goal
+            self._schedule_save()
 
         # Make sure yesterday has its full value once the day has changed.
         yesterday = (today - timedelta(days=1)).isoformat()

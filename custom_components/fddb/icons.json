@@ -18,6 +18,7 @@
       "calories_avg_30d": { "default": "mdi:chart-line" },
       "streak": { "default": "mdi:fire-circle" },
       "calories_remaining": { "default": "mdi:scale-balance" },
+      "goal_fddb": { "default": "mdi:bullseye" },
       "goal_progress": { "default": "mdi:bullseye-arrow" }
     },
     "number": {
