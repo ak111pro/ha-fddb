@@ -691,3 +691,89 @@ def test_as_attribute_has_meal_and_time(meals_html):
     assert entry["meal"] == "Dinner"
     assert entry["time"] == "19:30"
     assert list(entry)[-2:] == ["meal", "time"]
+
+
+# --- calories per meal (#17) -----------------------------------------------------------------
+
+
+def test_meal_subtotals_come_from_the_group_rows(meals_html):
+    meals = parse_diary(meals_html, DAY).meals
+    assert set(meals) == {"breakfast", "dinner", "snack_3"}
+    assert (meals["dinner"].calories, meals["dinner"].fat) == (960.0, 41.5)
+    assert (meals["dinner"].carbs, meals["dinner"].protein) == (75.0, 61.0)
+    assert (meals["breakfast"].calories, meals["breakfast"].products) == (440.0, 2)
+    assert (meals["snack_3"].calories, meals["snack_3"].products) == (540.0, 1)  # "1 product"
+
+
+def test_meal_subtotals_add_up_to_the_day(meals_html):
+    diary = parse_diary(meals_html, DAY)
+    assert sum(m.calories for m in diary.meals.values()) == diary.calories
+    assert sum(m.products for m in diary.meals.values()) == len(diary.products)
+
+
+def test_ungrouped_page_has_no_meals(normal, load_fixture):
+    assert parser_module.parse_diary(load_fixture("diary_empty.html"), DAY).meals == {}
+    start = normal.as_dict()  # sanity: a normal day has groups ...
+    assert set(start["meals"]) == {"breakfast", "lunch"}
+
+
+def test_group_row_without_readable_subtotal_is_summed_from_its_products(normal):
+    # diary_normal.html: "Lunch" has empty cells -> apple 50 + coffee 2 kcal
+    lunch = normal.meals["lunch"]
+    assert (lunch.calories, lunch.products) == (52.0, 2)
+    assert (lunch.fat, lunch.carbs, lunch.protein) == (0.2, 11.8, 0.5)
+    # "Breakfast" shows its own subtotal, which wins over the sum of its products
+    assert normal.meals["breakfast"].calories == 287.0
+
+
+def test_unknown_meal_goes_into_the_other_bucket(meals_html, caplog):
+    html = meals_html.replace("Dinner: 2 products", "Brunch: 2 products")
+    with caplog.at_level("DEBUG", logger=parser_module.__name__):
+        diary = parse_diary(html, DAY)
+    assert set(diary.meals) == {"breakfast", "snack_3", "other"}
+    assert diary.meals["other"].calories == 960.0
+    assert "Brunch" in caplog.text
+    # the product still knows the name FDDB showed
+    assert diary.products[1].meal == "Brunch"
+
+
+def test_several_unknown_groups_are_added_up(meals_html):
+    html = meals_html.replace("Dinner: 2 products", "Brunch: 2 products").replace(
+        "Breakfast: 2 products", "Tea time: 2 products"
+    )
+    other = parse_diary(html, DAY).meals["other"]
+    assert (other.calories, other.products) == (1400.0, 4)
+
+
+@pytest.mark.parametrize(
+    ("label", "key"),
+    [
+        ("Snack 1", "snack_1"),
+        ("snack 2", "snack_2"),
+        ("Snack 3", "snack_3"),
+        ("Breakfast", "breakfast"),
+        ("Lunch", "lunch"),
+        ("Dinner", "dinner"),
+        ("Snack", "other"),
+        ("", "other"),
+    ],
+)
+def test_meal_key(label, key):
+    assert parser_module._meal_key(label) == key  # noqa: SLF001
+
+
+def test_all_known_meals(meals_html):
+    html = meals_html.replace("Dinner: 2 products", "Snack 1: 2 products")
+    assert set(parse_diary(html, DAY).meals) == {"breakfast", "snack_1", "snack_3"}
+    assert parser_module.MEALS == ("breakfast", "snack_1", "lunch", "snack_2", "dinner", "snack_3")
+
+
+def test_meals_are_in_the_get_diary_data(meals_html):
+    data = parse_diary(meals_html, DAY).as_dict()
+    assert data["meals"]["dinner"] == {
+        "calories": 960.0,
+        "fat": 41.5,
+        "carbs": 75.0,
+        "protein": 61.0,
+        "products": 2,
+    }

@@ -63,6 +63,23 @@ class Product:
         }
 
 
+# The meal groups of an account with "Grouping: By meals" (FDDB's English names, as keys). They
+# are assumed to be these six; a group with any other name goes into the ``other`` bucket.
+MEALS = ("breakfast", "snack_1", "lunch", "snack_2", "dinner", "snack_3")
+OTHER_MEAL = "other"
+
+
+@dataclass(slots=True)
+class Meal:
+    """The subtotal of one meal group of the diary (several groups of ``other`` are added up)."""
+
+    calories: float = 0.0
+    fat: float = 0.0
+    carbs: float = 0.0
+    protein: float = 0.0
+    products: int = 0
+
+
 @dataclass(slots=True)
 class DiaryDay:
     """Totals and products of one diary day."""
@@ -84,6 +101,9 @@ class DiaryDay:
     # The energy FDDB says you require on this day in kcal ("Required energy" block of the diary
     # page, what the settings page calls "Required calories per day"); None if not shown.
     goal: float | None = None
+    # Subtotals by meal key (``MEALS`` or ``OTHER_MEAL``) of an account that groups its diary by
+    # meals; only meals with entries are there. Empty when the page has no group rows.
+    meals: dict[str, Meal] = field(default_factory=dict)
 
     @property
     def has_entries(self) -> bool:
@@ -319,8 +339,54 @@ def _group_name(cell: Tag) -> str | None:
     return ((match.group(1) if match else text).strip()) or None
 
 
+def _meal_key(name: str | None) -> str:
+    """ "snack_3" from "Snack 3", the key of a known meal; anything else is ``OTHER_MEAL``."""
+    key = re.sub(r"[\s_-]+", "_", (name or "").strip().lower())
+    if key in MEALS:
+        return key
+    _LOGGER.debug("Unknown meal group %r counted as %r", name, OTHER_MEAL)
+    return OTHER_MEAL
+
+
+def _group_subtotal(cells: list[Tag]) -> Meal | None:
+    """The subtotals shown on a group row (kcal, fat, carbs, protein), None if not readable."""
+    try:
+        return Meal(
+            calories=_cell_value(cells[2]),
+            fat=_cell_value(cells[3]),
+            carbs=_cell_value(cells[4]),
+            protein=_cell_value(cells[5]),
+        )
+    except FddbParseError:
+        return None
+
+
+def _meals(groups: list[tuple[str | None, Meal | None, list[Product]]]) -> dict[str, Meal]:
+    """Subtotals by meal key; a group row with unreadable figures is summed from its products."""
+    meals: dict[str, Meal] = {}
+    for name, subtotal, products in groups:
+        if subtotal is None:
+            subtotal = Meal(
+                calories=round(sum(p.calories for p in products), 1),
+                fat=round(sum(p.fat for p in products), 1),
+                carbs=round(sum(p.carbs for p in products), 1),
+                protein=round(sum(p.protein for p in products), 1),
+            )
+        meal = meals.setdefault(_meal_key(name), Meal())
+        meal.calories += subtotal.calories
+        meal.fat += subtotal.fat
+        meal.carbs += subtotal.carbs
+        meal.protein += subtotal.protein
+        meal.products += len(products)
+    for meal in meals.values():
+        meal.calories, meal.fat, meal.carbs, meal.protein = (
+            round(value, 1) for value in (meal.calories, meal.fat, meal.carbs, meal.protein)
+        )
+    return meals
+
+
 def _time_of_day(span: Tag | None) -> str | None:
-    """"HH:MM" from the (hidden) time span of a product row, None if there is none."""
+    """ "HH:MM" from the (hidden) time span of a product row, None if there is none."""
     if span is None:
         return None
     match = _TIME.match(" ".join(span.get_text(" ", strip=True).split()))
@@ -403,14 +469,19 @@ def _parse_diary(html: str, day: date) -> DiaryDay:
 
     products = []
     meal: str | None = None  # the group the following product rows belong to
+    groups: list[tuple[str | None, Meal | None, list[Product]]] = []
     for row in product_rows:
         cells = row.find_all("td", recursive=False)
         if len(cells) < 6:
             continue
         if _is_category_row(cells):
             meal = _group_name(cells[0])
+            groups.append((meal, _group_subtotal(cells), []))
             continue
-        products.append(_parse_product(cells, meal))
+        product = _parse_product(cells, meal)
+        products.append(product)
+        if groups:
+            groups[-1][2].append(product)
 
     carbs = _cell_value(footer_cells[4])
     nutrients = _nutrients(soup)
@@ -427,6 +498,7 @@ def _parse_diary(html: str, day: date) -> DiaryDay:
         nutrients=nutrients,
         balance=balance,
         goal=goal,
+        meals=_meals(groups),
     )
 
 

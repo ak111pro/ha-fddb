@@ -29,6 +29,7 @@ from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 from . import FddbConfigEntry
 from .coordinator import FddbCoordinator, FddbData
 from .entity import FddbEntity
+from .parser import MEALS, OTHER_MEAL
 from .periods import day_start, month_start, week_start
 
 
@@ -151,6 +152,38 @@ def _kcal_measurement(
     )
 
 
+def _meal_calories(data: FddbData, key: str) -> float | None:
+    """Energy of one meal today: 0 for a meal without entries on a grouped day, else unknown."""
+    meals = data.today.meals
+    if not meals:
+        return None
+    return meals[key].calories if key in meals else 0.0
+
+
+def _meal_attributes(data: FddbData, key: str) -> dict[str, Any]:
+    meals = data.today.meals
+    meal = meals.get(key) if meals else None
+    if meals and meal is None:
+        return {"fat": 0.0, "carbs": 0.0, "protein": 0.0}
+    return {
+        "fat": meal.fat if meal else None,
+        "carbs": meal.carbs if meal else None,
+        "protein": meal.protein if meal else None,
+    }
+
+
+def _meal_sensor(key: str) -> FddbSensorDescription:
+    """Calories of one meal group today (same pattern as the daily total, with its macros)."""
+    return _kcal_total(
+        f"calories_{key}",
+        lambda data, _c, key=key: _meal_calories(data, key),
+        day_start,
+        attributes_fn=lambda data, _c, key=key: _meal_attributes(data, key),
+        # Only for a group with a name outside of MEALS, so off unless needed.
+        entity_registry_enabled_default=key != OTHER_MEAL,
+    )
+
+
 def _remaining(data: FddbData, coordinator: FddbCoordinator) -> float | None:
     goal, _source = coordinator.effective_goal
     if not goal:
@@ -210,6 +243,8 @@ SENSORS: tuple[FddbSensorDescription, ...] = (
         _nutrient(key, unit, precision=precision, enabled=False)
         for key, unit, precision in MICRONUTRIENTS
     ),
+    # --- calories per meal group (accounts with "Grouping: By meals") -----------------------
+    *(_meal_sensor(key) for key in (*MEALS, OTHER_MEAL)),
     FddbSensorDescription(
         key="products",
         state_class=SensorStateClass.TOTAL,

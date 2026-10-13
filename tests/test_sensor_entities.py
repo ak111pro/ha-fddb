@@ -108,6 +108,8 @@ def test_other_sensors_have_no_extra_attributes(sensor_module, load_fixture):
             "occupation",
         ):
             continue
+        if description.key in MEAL_KEYS:
+            continue
         sensor = _make_sensor(sensor_module, description.key, load_fixture)
         assert not sensor.extra_state_attributes, description.key
 
@@ -118,6 +120,11 @@ def test_share_sensors_report_zero_on_an_empty_day(sensor_module, load_fixture, 
     sensor.coordinator.data.today = sys.modules["fddb_under_test.parser"].DiaryDay(day=DAY)
     assert sensor.native_value == 0.0
 
+
+MEAL_KEYS = {
+    f"calories_{meal}"
+    for meal in ("breakfast", "snack_1", "lunch", "snack_2", "dinner", "snack_3", "other")
+}
 
 # key: (device class, state class, unit, last_reset kind, display precision)
 EXPECTED = {
@@ -157,6 +164,7 @@ EXPECTED = {
     "carbs_share": (None, "measurement", "%", None, 0),
     "fat_share": (None, "measurement", "%", None, 0),
     "calories_yesterday": (None, "measurement", "kcal", None, 0),
+    **{key: ("energy", "total", "kcal", "day", 0) for key in MEAL_KEYS},
     "balance": (None, "measurement", "kcal", None, 0),
     "balance_yesterday": (None, "measurement", "kcal", None, 0),
     "calories_week": ("energy", "total", "kcal", "week", 0),
@@ -492,3 +500,57 @@ def test_balance_is_unknown_without_the_block(sensor_module, load_fixture):
     sensor = _make_sensor(sensor_module, "balance_yesterday", load_fixture)
     sensor.coordinator.data.yesterday_balance = None
     assert sensor.native_value is None
+
+
+# --- calories per meal (#17) -----------------------------------------------------------------
+# diary_meals.html: Breakfast 440 kcal, Dinner 960 kcal, Snack 3 540 kcal; no Lunch, Snack 1/2.
+
+
+def _meal(sensor_module, key, load_fixture, diary="diary_meals.html"):
+    return _make_sensor(sensor_module, f"calories_{key}", load_fixture, diary=diary)
+
+
+@pytest.mark.parametrize(
+    ("key", "kcal", "fat", "carbs", "protein"),
+    [
+        ("breakfast", 440, 9.5, 66.5, 21),
+        ("dinner", 960, 41.5, 75, 61),
+        ("snack_3", 540, 32, 50, 7),
+    ],
+)
+def test_meal_with_entries(sensor_module, load_fixture, key, kcal, fat, carbs, protein):
+    sensor = _meal(sensor_module, key, load_fixture)
+    assert sensor.native_value == kcal
+    assert sensor.extra_state_attributes == {"fat": fat, "carbs": carbs, "protein": protein}
+    assert sensor.device_class == "energy"
+    assert sensor.state_class == "total"
+    assert sensor.last_reset is not None
+
+
+@pytest.mark.parametrize("key", ["lunch", "snack_1", "snack_2", "other"])
+def test_empty_meal_of_a_grouped_day_is_zero(sensor_module, load_fixture, key):
+    sensor = _meal(sensor_module, key, load_fixture)
+    assert sensor.native_value == 0.0
+    assert sensor.extra_state_attributes == {"fat": 0.0, "carbs": 0.0, "protein": 0.0}
+
+
+@pytest.mark.parametrize("diary", ["diary_empty.html"])
+def test_meals_are_unknown_when_the_page_has_no_groups(sensor_module, load_fixture, diary):
+    for key in MEAL_KEYS:
+        sensor = _make_sensor(sensor_module, key, load_fixture, diary=diary)
+        assert sensor.native_value is None, key
+        assert sensor.extra_state_attributes == {"fat": None, "carbs": None, "protein": None}
+
+
+def test_meals_are_enabled_by_default_except_the_other_bucket(sensor_module):
+    for description in sensor_module.SENSORS:
+        if description.key in MEAL_KEYS:
+            assert description.entity_registry_enabled_default == (
+                description.key != "calories_other"
+            ), description.key
+            assert description.entity_category is None
+
+
+def test_meal_attribute_names_are_not_the_products_list(sensor_module, load_fixture):
+    # the heavy ``products`` attribute stays on the calories sensor only
+    assert "products" not in _meal(sensor_module, "dinner", load_fixture).extra_state_attributes

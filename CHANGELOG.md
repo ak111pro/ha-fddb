@@ -21,6 +21,19 @@
 
 ### Added
 
+- Calories per meal (#17): for accounts with *Grouping: By meals* there are sensors for
+  *Breakfast*, *Snack 1*, *Lunch*, *Snack 2*, *Dinner* and *Snack 3* "calories today"
+  (`calories_breakfast`, `calories_snack_1`, `calories_lunch`, `calories_snack_2`,
+  `calories_dinner`, `calories_snack_3`; kcal, device class *energy*, state class `total` with
+  `last_reset` at midnight German time, **enabled by default**). They show the subtotal of the
+  group row of the diary page (a group row with unreadable figures is summed from its
+  products), with the meal's `fat`, `carbs` and `protein` in grams as attributes. A meal
+  without entries on a grouped day is `0`; a page without any group rows (account not grouped,
+  or nothing logged yet) gives `unknown`. A group with another name goes into *Other meals
+  calories today* (`calories_other`, **disabled by default**; a debug log line names the group)
+  instead of being lost. The six names are an assumption based on FDDB's usual meal groups
+  (Breakfast, Lunch, Dinner and Snack 2 and 3 were seen on real pages, Snack 1 was not). The
+  `get_diary` response has a new key `meals` with the subtotals by meal.
 - Meal and time per product (#16): every entry of the `products` attribute of *Calories today*
   (and of the `products` of the `get_diary` response) has two new keys, `meal` and `time`.
   `meal` is the group the entry is listed under on an account with *Grouping: By meals*

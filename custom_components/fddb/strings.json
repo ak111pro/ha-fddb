@@ -162,6 +162,27 @@
       "calories_month": {
         "name": "Calories this month"
       },
+      "calories_breakfast": {
+        "name": "Breakfast calories today"
+      },
+      "calories_snack_1": {
+        "name": "Snack 1 calories today"
+      },
+      "calories_lunch": {
+        "name": "Lunch calories today"
+      },
+      "calories_snack_2": {
+        "name": "Snack 2 calories today"
+      },
+      "calories_dinner": {
+        "name": "Dinner calories today"
+      },
+      "calories_snack_3": {
+        "name": "Snack 3 calories today"
+      },
+      "calories_other": {
+        "name": "Other meals calories today"
+      },
       "calories_avg_7d": {
         "name": "Average calories 7 days"
       },

@@ -29,6 +29,7 @@ no public API. Everything is configured in the UI.
 - Further values of the diary page: alcohol, bread units (BE), salt and cholesterol
 - Vitamins and minerals of the diary page (20 sensors, disabled by default)
 - Water content of the logged foods and drinks (not a drinking-intake tracker; FDDB has none)
+- Calories per meal (breakfast, snack 1, lunch, snack 2, dinner, snack 3) for accounts that group the diary by meals
 - Macro shares of today's energy (protein, carbohydrates, fat)
 - Yesterday, this week (Monday to today), this month, 7-day and 30-day averages
 - Logging streak (consecutive days with at least one entry)
@@ -60,6 +61,8 @@ in English with the German name in parentheses.
 | Water from food and drinks today (Wasser aus Speisen und Getränken heute) | sensor | L | The *Water* row of the diary page: the water content of everything you logged, foods and drinks. **Not** your drinking intake. Disabled by default |
 | Vitamin C, Retinol (vitamin A), Vitamin D, Vitamin E, Thiamine (vitamin B1), Riboflavin (vitamin B2), Vitamin B6, Vitamin B12 *today* (Vitamin C ... Vitamin B12 heute) | 8 sensors | mg or µg | The vitamins of the diary page. **Disabled by default.** Retinol, vitamin D and vitamin B12 are in µg, the others in mg |
 | Iron, Zinc, Magnesium, Manganese, Fluorine, Chlorine, Copper, Potassium, Calcium, Phosphorus, Sulphur, Iodine *today* (Eisen, Zink, Magnesium, Mangan, Fluor, Chlor, Kupfer, Kalium, Calcium, Phosphor, Schwefel, Jod heute) | 12 sensors | mg or µg | The minerals of the diary page. **Disabled by default.** Iodine is in µg, the others in mg |
+| Breakfast, Snack 1, Lunch, Snack 2, Dinner, Snack 3 *calories today* (Kalorien Frühstück, Snack 1, Mittagessen, Snack 2, Abendessen, Snack 3 heute) | 6 sensors | kcal | The meal subtotals of a diary grouped by meals (**Settings > Grouping: By meals** at FDDB). State class `total` with `last_reset` at midnight, device class *energy*. Attributes `fat`, `carbs` and `protein` (g) of the meal. `0` for a meal without entries on a grouped day, `unknown` when the page has no groups (account not grouped, or nothing logged yet) |
+| Other meals calories today (Kalorien sonstige Mahlzeiten heute) | sensor | kcal | Same for any group whose name is none of the six above (for example if FDDB adds or renames a meal); the groups are added up. **Disabled by default** |
 | Products today (Produkte heute) | sensor | | Number of diary entries |
 | Protein share (Eiweißanteil) | sensor | % | Share of energy (protein 4, carbs 4, fat 9 kcal/g) |
 | Carbohydrate share (Kohlenhydratanteil) | sensor | % | |
