@@ -31,6 +31,7 @@ _register_package("custom_components.fddb", PACKAGE_DIR)
 const = importlib.import_module("custom_components.fddb.const")
 parser = importlib.import_module("custom_components.fddb.parser")
 api = importlib.import_module("custom_components.fddb.api")
+periods = importlib.import_module("custom_components.fddb.periods")
 
 
 @pytest.fixture(scope="session")

@@ -17,3 +17,23 @@
   (`name`, `amount`, `calories`, `fat`, `carbs`, `protein`, `link`; `link` is the relative FDDB
   path, `null` for own foods and recipes). The attribute is excluded from the recorder, so it
   never counts against the 16 KB attribute limit and does not grow the database (#3).
+
+### Changed
+
+- Device classes, state classes and display precision for all sensors (#12):
+  - Fat, carbohydrates, sugar, protein and fibre today: device class *weight* (unit g, was no
+    class); Calories today, this week and this month: device class *energy* (unit kcal, was no
+    class).
+  - These sensors, and Products today, change state class from `measurement` to `total` and
+    now report `last_reset` (midnight of the day, Monday of the week, first of the month, all
+    in German time). Their values and units are unchanged.
+  - Shares, yesterday, the 7- and 30-day averages, streak, remaining calories and goal progress
+    stay `measurement` (no device class; the energy class does not allow `measurement`).
+  - **What you might see:** because the state class of the changed sensors differs from the
+    long-term statistics already recorded for them, Home Assistant can show a repair
+    "The mean type of sensor.xxx has changed" under Settings > System > Repairs (or in
+    Developer tools > Statistics). Use *Fix issue* and choose to delete the old statistics, or
+    ignore it; the entities themselves keep working and history charts of the states are not
+    affected. Sensors that are *weight* or *energy* can now also be shown in other units
+    (for example oz or kJ) in the entity settings, and imperial unit systems show weights in
+    ounces.

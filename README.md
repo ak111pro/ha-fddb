@@ -64,6 +64,10 @@ in English with the German name in parentheses.
 | Daily calorie goal (Tägliches Kalorienziel) | number (config) | kcal | 0 = no goal. Stored by the integration |
 | Problem (Problem) | binary sensor (diagnostic) | | On when the last update failed; attribute `error` has the reason |
 
+Daily values (calories, macros, number of products) use state class `total` with
+`last_reset` at midnight German time; weekly and monthly calories reset on Monday and on the
+1st. Calories and macros have the device classes *energy* (kcal) and *weight* (g).
+
 ## Installation
 
 ### HACS (custom repository)
@@ -202,6 +206,10 @@ python -m venv .venv && . .venv/bin/activate
 pip install -r requirements_test.txt
 pytest
 ```
+
+`tests/test_sensor_entities.py` needs Home Assistant itself and is skipped when it is not
+installed; run it in an environment that has Home Assistant (for example `python3 -m pytest`
+inside the Home Assistant container, on a copy of the repository).
 
 The fixtures in `tests/fixtures` are synthetic and contain no real account data.
 

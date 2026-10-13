@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import date, datetime
 from typing import Any
 
 from homeassistant.components.sensor import (
@@ -13,15 +13,20 @@ from homeassistant.components.sensor import (
     SensorEntityDescription,
     SensorStateClass,
 )
-from homeassistant.const import PERCENTAGE, EntityCategory, UnitOfMass, UnitOfTime
+from homeassistant.const import (
+    PERCENTAGE,
+    EntityCategory,
+    UnitOfEnergy,
+    UnitOfMass,
+    UnitOfTime,
+)
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 
 from . import FddbConfigEntry
 from .coordinator import FddbCoordinator, FddbData
 from .entity import FddbEntity
-
-KCAL = "kcal"
+from .periods import day_start, month_start, week_start
 
 
 def _macro_share(data: FddbData, macro: str) -> float:
@@ -34,15 +39,56 @@ class FddbSensorDescription(SensorEntityDescription):
 
     value_fn: Callable[[FddbData, FddbCoordinator], float | int | datetime | None]
     attributes_fn: Callable[[FddbData], dict[str, Any]] | None = None
+    # Only for state class TOTAL: the moment the value started counting from zero.
+    last_reset_fn: Callable[[date], datetime] | None = None
+
+
+# Values that start at zero at the beginning of a period (day, week, month) use state class
+# TOTAL with last_reset. TOTAL_INCREASING would be wrong because a value also goes down when
+# a diary entry is deleted, and MEASUREMENT is not allowed together with the energy device class.
 
 
 def _grams(key: str) -> FddbSensorDescription:
     return FddbSensorDescription(
         key=key,
+        device_class=SensorDeviceClass.WEIGHT,
         native_unit_of_measurement=UnitOfMass.GRAMS,
-        state_class=SensorStateClass.MEASUREMENT,
+        state_class=SensorStateClass.TOTAL,
+        last_reset_fn=day_start,
         suggested_display_precision=1,
         value_fn=lambda data, _c, key=key: getattr(data.today, key),
+    )
+
+
+def _kcal_total(
+    key: str,
+    value_fn: Callable[[FddbData, FddbCoordinator], float | None],
+    last_reset_fn: Callable[[date], datetime],
+    **kwargs: Any,
+) -> FddbSensorDescription:
+    return FddbSensorDescription(
+        key=key,
+        device_class=SensorDeviceClass.ENERGY,
+        native_unit_of_measurement=UnitOfEnergy.KILO_CALORIE,
+        state_class=SensorStateClass.TOTAL,
+        last_reset_fn=last_reset_fn,
+        suggested_display_precision=0,
+        value_fn=value_fn,
+        **kwargs,
+    )
+
+
+def _kcal_measurement(
+    key: str, value_fn: Callable[[FddbData, FddbCoordinator], float | None]
+) -> FddbSensorDescription:
+    # Averages, yesterday and the remaining budget are snapshots, not sums that start at zero,
+    # so they keep the measurement state class and have no device class.
+    return FddbSensorDescription(
+        key=key,
+        native_unit_of_measurement=UnitOfEnergy.KILO_CALORIE,
+        state_class=SensorStateClass.MEASUREMENT,
+        suggested_display_precision=0,
+        value_fn=value_fn,
     )
 
 
@@ -59,12 +105,10 @@ def _goal_percent(data: FddbData, coordinator: FddbCoordinator) -> float | None:
 
 
 SENSORS: tuple[FddbSensorDescription, ...] = (
-    FddbSensorDescription(
-        key="calories",
-        native_unit_of_measurement=KCAL,
-        state_class=SensorStateClass.MEASUREMENT,
-        suggested_display_precision=0,
-        value_fn=lambda data, _c: data.today.calories,
+    _kcal_total(
+        "calories",
+        lambda data, _c: data.today.calories,
+        day_start,
         attributes_fn=lambda data: {"products": data.today.product_attributes()},
     ),
     _grams("fat"),
@@ -74,7 +118,9 @@ SENSORS: tuple[FddbSensorDescription, ...] = (
     _grams("fibre"),
     FddbSensorDescription(
         key="products",
-        state_class=SensorStateClass.MEASUREMENT,
+        state_class=SensorStateClass.TOTAL,
+        last_reset_fn=day_start,
+        suggested_display_precision=0,
         value_fn=lambda data, _c: len(data.today.products),
     ),
     *(
@@ -87,54 +133,19 @@ SENSORS: tuple[FddbSensorDescription, ...] = (
         )
         for macro in ("protein", "carbs", "fat")
     ),
-    FddbSensorDescription(
-        key="calories_yesterday",
-        native_unit_of_measurement=KCAL,
-        state_class=SensorStateClass.MEASUREMENT,
-        suggested_display_precision=0,
-        value_fn=lambda data, _c: data.yesterday_calories,
-    ),
-    FddbSensorDescription(
-        key="calories_week",
-        native_unit_of_measurement=KCAL,
-        state_class=SensorStateClass.MEASUREMENT,
-        suggested_display_precision=0,
-        value_fn=lambda data, _c: data.week_calories,
-    ),
-    FddbSensorDescription(
-        key="calories_month",
-        native_unit_of_measurement=KCAL,
-        state_class=SensorStateClass.MEASUREMENT,
-        suggested_display_precision=0,
-        value_fn=lambda data, _c: data.month_calories,
-    ),
-    FddbSensorDescription(
-        key="calories_avg_7d",
-        native_unit_of_measurement=KCAL,
-        state_class=SensorStateClass.MEASUREMENT,
-        suggested_display_precision=0,
-        value_fn=lambda data, _c: data.avg_7_days,
-    ),
-    FddbSensorDescription(
-        key="calories_avg_30d",
-        native_unit_of_measurement=KCAL,
-        state_class=SensorStateClass.MEASUREMENT,
-        suggested_display_precision=0,
-        value_fn=lambda data, _c: data.avg_30_days,
-    ),
+    _kcal_measurement("calories_yesterday", lambda data, _c: data.yesterday_calories),
+    _kcal_total("calories_week", lambda data, _c: data.week_calories, week_start),
+    _kcal_total("calories_month", lambda data, _c: data.month_calories, month_start),
+    _kcal_measurement("calories_avg_7d", lambda data, _c: data.avg_7_days),
+    _kcal_measurement("calories_avg_30d", lambda data, _c: data.avg_30_days),
     FddbSensorDescription(
         key="streak",
         native_unit_of_measurement=UnitOfTime.DAYS,
         state_class=SensorStateClass.MEASUREMENT,
+        suggested_display_precision=0,
         value_fn=lambda data, _c: data.streak,
     ),
-    FddbSensorDescription(
-        key="calories_remaining",
-        native_unit_of_measurement=KCAL,
-        state_class=SensorStateClass.MEASUREMENT,
-        suggested_display_precision=0,
-        value_fn=_remaining,
-    ),
+    _kcal_measurement("calories_remaining", _remaining),
     FddbSensorDescription(
         key="goal_progress",
         native_unit_of_measurement=PERCENTAGE,
@@ -182,3 +193,9 @@ class FddbSensor(FddbEntity, SensorEntity):
         if (attributes_fn := self.entity_description.attributes_fn) is None:
             return None
         return attributes_fn(self.coordinator.data)
+
+    @property
+    def last_reset(self) -> datetime | None:
+        if (last_reset_fn := self.entity_description.last_reset_fn) is None:
+            return None
+        return last_reset_fn(self.coordinator.data.today.day)

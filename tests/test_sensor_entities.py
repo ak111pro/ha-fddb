@@ -11,6 +11,7 @@ from datetime import date, datetime, timezone
 import importlib.util
 from pathlib import Path
 import sys
+from zoneinfo import ZoneInfo
 from types import SimpleNamespace
 
 import pytest
@@ -83,3 +84,70 @@ def test_share_sensors_report_zero_on_an_empty_day(sensor_module, load_fixture, 
     sensor = _make_sensor(sensor_module, key, load_fixture)
     sensor.coordinator.data.today = sys.modules["fddb_under_test.parser"].DiaryDay(day=DAY)
     assert sensor.native_value == 0.0
+
+
+# key: (device class, state class, unit, last_reset kind, display precision)
+EXPECTED = {
+    "calories": ("energy", "total", "kcal", "day", 0),
+    "fat": ("weight", "total", "g", "day", 1),
+    "carbs": ("weight", "total", "g", "day", 1),
+    "sugar": ("weight", "total", "g", "day", 1),
+    "protein": ("weight", "total", "g", "day", 1),
+    "fibre": ("weight", "total", "g", "day", 1),
+    "products": (None, "total", None, "day", 0),
+    "protein_share": (None, "measurement", "%", None, 0),
+    "carbs_share": (None, "measurement", "%", None, 0),
+    "fat_share": (None, "measurement", "%", None, 0),
+    "calories_yesterday": (None, "measurement", "kcal", None, 0),
+    "calories_week": ("energy", "total", "kcal", "week", 0),
+    "calories_month": ("energy", "total", "kcal", "month", 0),
+    "calories_avg_7d": (None, "measurement", "kcal", None, 0),
+    "calories_avg_30d": (None, "measurement", "kcal", None, 0),
+    "streak": (None, "measurement", "d", None, 0),
+    "calories_remaining": (None, "measurement", "kcal", None, 0),
+    "goal_progress": (None, "measurement", "%", None, 0),
+    "last_update": ("timestamp", None, None, None, None),
+}
+
+
+def test_every_sensor_is_covered(sensor_module):
+    assert {d.key for d in sensor_module.SENSORS} == set(EXPECTED)
+
+
+@pytest.mark.parametrize("key", sorted(EXPECTED))
+def test_classes_and_units(sensor_module, key):
+    description = next(d for d in sensor_module.SENSORS if d.key == key)
+    device_class, state_class, unit, _reset, precision = EXPECTED[key]
+    assert description.device_class == device_class
+    assert description.state_class == state_class
+    assert description.native_unit_of_measurement == unit
+    assert description.suggested_display_precision == precision
+
+
+@pytest.mark.parametrize("key", sorted(EXPECTED))
+def test_combination_is_valid_for_home_assistant(sensor_module, key):
+    from homeassistant.components.sensor.const import (
+        DEVICE_CLASS_STATE_CLASSES,
+        DEVICE_CLASS_UNITS,
+    )
+
+    description = next(d for d in sensor_module.SENSORS if d.key == key)
+    if description.device_class in DEVICE_CLASS_STATE_CLASSES and description.state_class:
+        assert description.state_class in DEVICE_CLASS_STATE_CLASSES[description.device_class]
+    if description.device_class in DEVICE_CLASS_UNITS:
+        assert description.native_unit_of_measurement in DEVICE_CLASS_UNITS[description.device_class]
+
+
+@pytest.mark.parametrize("key", sorted(EXPECTED))
+def test_last_reset(sensor_module, load_fixture, key):
+    kind = EXPECTED[key][3]
+    sensor = _make_sensor(sensor_module, key, load_fixture)  # data.today.day = Wed 2026-10-07
+    expected = {
+        None: None,
+        "day": datetime(2026, 10, 7, tzinfo=ZoneInfo("Europe/Berlin")),
+        "week": datetime(2026, 10, 5, tzinfo=ZoneInfo("Europe/Berlin")),
+        "month": datetime(2026, 10, 1, tzinfo=ZoneInfo("Europe/Berlin")),
+    }[kind]
+    assert sensor.last_reset == expected
+    # last_reset is only valid together with state class total
+    assert (sensor.last_reset is not None) == (sensor.state_class == "total")
