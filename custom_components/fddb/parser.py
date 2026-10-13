@@ -25,6 +25,10 @@ class FddbParseError(FddbError):
     """The page did not look like expected (website probably changed)."""
 
 
+# Energy per gram, used to turn grams of macros into shares of energy.
+KCAL_PER_GRAM = {"fat": 9.0, "carbs": 4.0, "protein": 4.0}
+
+
 @dataclass(slots=True)
 class Product:
     """One diary entry."""
@@ -37,6 +41,18 @@ class Product:
     protein: float
     link: str | None
     time: str | None = None
+
+    def as_attribute(self) -> dict[str, str | float | None]:
+        """Compact form used for the ``products`` state attribute (no time of day)."""
+        return {
+            "name": self.name,
+            "amount": self.amount,
+            "calories": self.calories,
+            "fat": self.fat,
+            "carbs": self.carbs,
+            "protein": self.protein,
+            "link": self.link,
+        }
 
 
 @dataclass(slots=True)
@@ -55,6 +71,15 @@ class DiaryDay:
     @property
     def has_entries(self) -> bool:
         return bool(self.products) or self.calories > 0
+
+    def macro_share(self, macro: str) -> float:
+        """Share of ``fat``, ``carbs`` or ``protein`` in the energy of the three macros, in %.
+
+        Returns 0.0 on a day without any macros (nothing logged) instead of dividing by zero.
+        """
+        energy = {key: getattr(self, key) * factor for key, factor in KCAL_PER_GRAM.items()}
+        total = sum(energy.values())
+        return round(energy[macro] / total * 100, 1) if total else 0.0
 
     def as_dict(self, with_products: bool = True) -> dict:
         data = asdict(self)

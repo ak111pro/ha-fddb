@@ -21,13 +21,10 @@ from .coordinator import FddbCoordinator, FddbData
 from .entity import FddbEntity
 
 KCAL = "kcal"
-KCAL_PER_GRAM = {"fat": 9.0, "carbs": 4.0, "protein": 4.0}
 
 
-def _macro_share(data: FddbData, macro: str) -> float | None:
-    energy = {key: getattr(data.today, key) * factor for key, factor in KCAL_PER_GRAM.items()}
-    total = sum(energy.values())
-    return round(energy[macro] / total * 100, 1) if total else None
+def _macro_share(data: FddbData, macro: str) -> float:
+    return data.today.macro_share(macro)
 
 
 @dataclass(frozen=True, kw_only=True)
