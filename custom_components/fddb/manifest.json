@@ -9,5 +9,5 @@
   "issue_tracker": "https://github.com/ak111pro/ha-fddb/issues",
   "loggers": ["custom_components.fddb"],
   "requirements": ["beautifulsoup4>=4.12.0"],
-  "version": "0.1.0"
+  "version": "0.2.0"
 }

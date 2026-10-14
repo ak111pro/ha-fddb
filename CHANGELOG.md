@@ -1,6 +1,8 @@
 # Changelog
 
-## Unreleased
+## 0.2.0 – 2026-10-14
+
+First release, tested on a live Home Assistant 2026.9.4 installation.
 
 ### Changed
 

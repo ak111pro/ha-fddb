@@ -4,16 +4,13 @@
 [![Tests](https://github.com/ak111pro/ha-fddb/actions/workflows/tests.yml/badge.svg)](https://github.com/ak111pro/ha-fddb/actions/workflows/tests.yml)
 [![HACS Custom](https://img.shields.io/badge/HACS-Custom-orange.svg)](https://hacs.xyz)
 
-> [!WARNING]
-> **Experimental, AI-generated, not yet tested in Home Assistant.**
->
-> This integration was written by an AI assistant (Claude, by Anthropic) for its owner
-> [@ak111pro](https://github.com/ak111pro), based on what the excellent
+> [!NOTE]
+> **AI-generated.** This integration was written by an AI assistant (Claude, by Anthropic) for
+> its owner [@ak111pro](https://github.com/ak111pro), based on what the excellent
 > [itobey/fddb-exporter](https://github.com/itobey/fddb-exporter) by
-> [@itobey](https://github.com/itobey) does. The diary parser has been checked against
-> real fddb.info pages, but the integration as a whole has **not yet run in a real Home
-> Assistant installation**. Expect bugs, do not rely on it for anything important, and
-> please report problems as issues. This notice will be updated once it has been tested.
+> [@itobey](https://github.com/itobey) does. It runs in a real Home Assistant installation
+> since 2026-10-14. FDDB has no public API, so the integration reads the fddb.info web pages;
+> a change on their side can break it at any time. Please report problems as issues.
 
 A Home Assistant integration that reads your food diary from [fddb.info](https://fddb.info)
 (the German food and calorie diary) and turns it into sensors: today's
@@ -340,7 +337,7 @@ copied here.
 
 ## Disclaimer
 
-This project is AI-generated and experimental (see the notice at the top). It is not
+This project is AI-generated (see the notice at the top). It is not
 affiliated with, endorsed by or connected to FDDB / fddb.info or its operators, nor with
 fddb-exporter or its author. FDDB is a trademark of its respective owner. Use at your own risk and respect
 FDDB's terms of use.
