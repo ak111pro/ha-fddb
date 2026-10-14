@@ -14,6 +14,14 @@
 
 ### Fixed
 
+- The calories-per-meal sensors show `0` on a day without entries instead of `unknown` (the
+  diary page has no meal rows at all then). `unknown` remains for a day with entries but no
+  meal rows, i.e. an account that does not group its diary by meals.
+- Days stored by an earlier version have no energy balance, so *energy balance yesterday* stayed
+  `unknown`. Those days (within the backfill window) are read once more after the update.
+- Removing the integration now also deletes its stored history; Home Assistant kept the file
+  before.
+
 - The device link ("Visit") now opens `https://fddb.mobi/notepad/` instead of
   `https://fddb.info/db/i18n/myday20/`. The old address answers with a server error unless the
   browser already has an FDDB session; the new one redirects to the login page and shows the

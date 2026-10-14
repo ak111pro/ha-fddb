@@ -127,6 +127,18 @@ class FddbCoordinator(DataUpdateCoordinator[FddbData]):
             self.profile = Profile.from_dict(stored["profile"])
             self.profile_updated = _parse_time(stored.get("profile_updated"))
         self._backfilled = stored.get("backfilled", False)
+        # Days stored by a version before 0.2.0 have no "balance" (nor "goal"): read the ones the
+        # backfill covers once more, so balance yesterday & co. are known again.
+        first = (fddb_today() - timedelta(days=BACKFILL_DAYS)).isoformat()
+        outdated = [
+            key
+            for key, record in self._days.items()
+            if key >= first and record.get("final") and "balance" not in record
+        ]
+        for key in outdated:
+            self._days[key]["final"] = False
+        if outdated:
+            self._backfilled = False
         diagnostics = stored.get("diagnostics", {})
         self.last_success = _parse_time(diagnostics.get("last_success"))
         self.total_errors = int(diagnostics.get("total_errors", 0))

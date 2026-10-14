@@ -17,10 +17,18 @@ from homeassistant.core import (
 from homeassistant.exceptions import HomeAssistantError, ServiceValidationError
 from homeassistant.helpers import config_validation as cv
 from homeassistant.helpers.aiohttp_client import async_create_clientsession
+from homeassistant.helpers.storage import Store
 from homeassistant.helpers.typing import ConfigType
 
 from .api import FddbClient
-from .const import ATTR_CONFIG_ENTRY_ID, ATTR_DATE, DOMAIN, SERVICE_GET_DIARY, SERVICE_REFRESH
+from .const import (
+    ATTR_CONFIG_ENTRY_ID,
+    ATTR_DATE,
+    DOMAIN,
+    SERVICE_GET_DIARY,
+    SERVICE_REFRESH,
+    STORAGE_VERSION,
+)
 from .coordinator import FddbCoordinator, fddb_today
 from .parser import FddbError
 
@@ -112,6 +120,11 @@ async def async_setup_entry(hass: HomeAssistant, entry: FddbConfigEntry) -> bool
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
     coordinator.async_start_background_jobs()
     return True
+
+
+async def async_remove_entry(hass: HomeAssistant, entry: ConfigEntry) -> None:
+    """Delete the stored history of a removed entry (Home Assistant keeps the file otherwise)."""
+    await Store(hass, STORAGE_VERSION, f"{DOMAIN}.{entry.entry_id}").async_remove()
 
 
 async def async_unload_entry(hass: HomeAssistant, entry: FddbConfigEntry) -> bool:

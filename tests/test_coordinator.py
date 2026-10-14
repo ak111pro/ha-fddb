@@ -521,6 +521,44 @@ def test_a_stored_day_from_an_older_version_has_no_balance(mods):
     assert data.yesterday_balance is None
 
 
+def test_days_from_an_older_version_are_read_again_once(mods):
+    today = mods.coordinator.fddb_today()
+    old_day = (today - timedelta(days=1)).isoformat()
+    new_day = (today - timedelta(days=2)).isoformat()
+    too_old = (today - timedelta(days=400)).isoformat()
+    stored = {
+        "backfilled": True,
+        "days": {
+            old_day: {"calories": 1500.0, "products": 3, "final": True},
+            new_day: {"calories": 900.0, "products": 2, "final": True, "balance": -100.0},
+            too_old: {"calories": 800.0, "products": 1, "final": True},
+        },
+    }
+
+    async def scenario(coordinator):
+        return coordinator._backfilled, {  # noqa: SLF001
+            key: record["final"]
+            for key, record in coordinator._days.items()  # noqa: SLF001
+        }
+
+    backfilled, final = run(mods, FakeClient(None), scenario, store=FakeStore(stored))
+    assert backfilled is False
+    assert final == {old_day: False, new_day: True, too_old: True}
+
+
+def test_nothing_is_read_again_when_every_day_has_a_balance(mods):
+    yesterday = (mods.coordinator.fddb_today() - timedelta(days=1)).isoformat()
+    stored = {
+        "backfilled": True,
+        "days": {yesterday: {"calories": 1.0, "products": 1, "final": True, "balance": None}},
+    }
+
+    async def scenario(coordinator):
+        return coordinator._backfilled  # noqa: SLF001
+
+    assert run(mods, FakeClient(None), scenario, store=FakeStore(stored)) is True
+
+
 # --- daily goal from the diary page (#15) --------------------------------------------------
 
 

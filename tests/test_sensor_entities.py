@@ -534,12 +534,21 @@ def test_empty_meal_of_a_grouped_day_is_zero(sensor_module, load_fixture, key):
     assert sensor.extra_state_attributes == {"fat": 0.0, "carbs": 0.0, "protein": 0.0}
 
 
-@pytest.mark.parametrize("diary", ["diary_empty.html"])
-def test_meals_are_unknown_when_the_page_has_no_groups(sensor_module, load_fixture, diary):
+def test_meals_are_unknown_when_the_page_has_entries_but_no_groups(sensor_module, load_fixture):
+    # An account without "Grouping: By meals": entries, but no group rows on the page.
     for key in MEAL_KEYS:
-        sensor = _make_sensor(sensor_module, key, load_fixture, diary=diary)
+        sensor = _make_sensor(sensor_module, key, load_fixture)
+        sensor.coordinator.data.today.meals = {}
+        assert sensor.coordinator.data.today.has_entries
         assert sensor.native_value is None, key
         assert sensor.extra_state_attributes == {"fat": None, "carbs": None, "protein": None}
+
+
+def test_meals_are_zero_on_a_day_without_entries(sensor_module, load_fixture):
+    for key in MEAL_KEYS:
+        sensor = _make_sensor(sensor_module, key, load_fixture, diary="diary_empty.html")
+        assert sensor.native_value == 0.0, key
+        assert sensor.extra_state_attributes == {"fat": 0.0, "carbs": 0.0, "protein": 0.0}
 
 
 def test_meals_are_enabled_by_default_except_the_other_bucket(sensor_module):

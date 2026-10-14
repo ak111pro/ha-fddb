@@ -153,17 +153,22 @@ def _kcal_measurement(
 
 
 def _meal_calories(data: FddbData, key: str) -> float | None:
-    """Energy of one meal today: 0 for a meal without entries on a grouped day, else unknown."""
+    """Energy of one meal today: 0 for a meal without entries, unknown without meal groups.
+
+    A day without any entries shows no group rows at all, so it counts as 0 for every meal (the
+    same rule as the nutrient sensors). Unknown remains for a day with entries but no groups:
+    an account that does not group its diary by meals.
+    """
     meals = data.today.meals
     if not meals:
-        return None
+        return None if data.today.has_entries else 0.0
     return meals[key].calories if key in meals else 0.0
 
 
 def _meal_attributes(data: FddbData, key: str) -> dict[str, Any]:
     meals = data.today.meals
     meal = meals.get(key) if meals else None
-    if meals and meal is None:
+    if meal is None and (meals or not data.today.has_entries):
         return {"fat": 0.0, "carbs": 0.0, "protein": 0.0}
     return {
         "fat": meal.fat if meal else None,
