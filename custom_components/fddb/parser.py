@@ -387,11 +387,20 @@ def is_logged_out(soup: BeautifulSoup) -> bool:
 
 
 def _is_category_row(cells: list[Tag]) -> bool:
+    """True for a meal group row ("Dinner: 4 products" with the group's subtotals).
+
+    Older pages draw these rows in grey (``color:#aaaaaa``). Since 2026-10-21 fddb.info no longer
+    does, so a row is also a group row when its first cell, without a link to the food database,
+    reads "<meal>: <n> product(s)". Own foods have no link either, but never that label.
+    """
     for cell in cells:
         for span in cell.select("span[style]"):
             if "color:#aaaaaa" in span["style"].replace(" ", "").lower():
                 return True
-    return False
+    first = cells[0]
+    if first.find("a") is not None:
+        return False
+    return _GROUP_LABEL.match(" ".join(first.get_text(" ", strip=True).split())) is not None
 
 
 _GROUP_LABEL = re.compile(r"^(.*?)\s*:\s*\d+\s+products?$", re.IGNORECASE)

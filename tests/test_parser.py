@@ -641,6 +641,43 @@ def test_group_rows_with_the_product_count_are_still_no_products(meals_html):
     assert not any("products" in name or "product:" in name for name in names)
 
 
+def test_group_rows_without_the_grey_colour(meals_html):
+    # fddb.info stopped drawing group rows in grey on 2026-10-21; the label still identifies them.
+    html = meals_html.replace("color:#AAAAAA;", "color:#666666;")
+    diary = parse_diary(html, DAY)
+    assert len(diary.products) == 5
+    assert [p.meal for p in diary.products] == [
+        "Snack 3",
+        "Dinner",
+        "Dinner",
+        "Breakfast",
+        "Breakfast",
+    ]
+    assert diary.meals["dinner"].calories == 960.0
+    assert diary.meals["breakfast"].calories == 440.0
+    assert diary.meals["snack_3"].calories == 540.0
+
+
+def test_group_rows_without_any_style(meals_html):
+    html = meals_html.replace(' style="color:#AAAAAA;"', "")
+    diary = parse_diary(html, DAY)
+    assert len(diary.products) == 5
+    assert set(diary.meals) == {"snack_3", "dinner", "breakfast"}
+
+
+def test_own_food_without_a_link_is_not_a_group_row(meals_html):
+    # An own food has no link to the food database; only the "<meal>: n products" label counts.
+    html = meals_html.replace(' style="color:#AAAAAA;"', "")
+    first_link = html.index("<a ", html.index("Example Chocolate") - 400)
+    end = html.index("</a>", first_link) + len("</a>")
+    html = html[:first_link] + "Salat" + html[end:]
+    diary = parse_diary(html, DAY)
+    assert len(diary.products) == 5
+    assert diary.products[0].name == "Salat"
+    assert diary.products[0].link is None
+    assert diary.products[0].meal == "Snack 3"
+
+
 def test_meal_of_a_group_row_without_a_count(normal):
     # diary_normal.html has plain group labels ("Breakfast", "Lunch") without ": n products"
     assert [p.meal for p in normal.products] == ["Breakfast", "Breakfast", "Lunch", "Lunch"]

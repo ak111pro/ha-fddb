@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.2.1 – 2026-10-21
+
+### Fixed
+
+- Meal sensors (breakfast, lunch, dinner, snacks, other) went `unknown` and the meal group rows
+  ("Dinner: 4 products") were counted as products: since 2026-10-21 fddb.info no longer draws
+  these rows in grey. Group rows are now also recognised by their "<meal>: n product(s)" label
+  (rows without a food-database link); own foods without a link are still products.
+
 ## 0.2.0 – 2026-10-14
 
 First release, tested on a live Home Assistant 2026.9.4 installation.
