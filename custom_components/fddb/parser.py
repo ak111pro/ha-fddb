@@ -272,19 +272,10 @@ def _number(text: str) -> float:
         raise FddbParseError(f"Not a number: {text!r}") from err
 
 
-_NO_VALUE = re.compile(r"[-–—]?\s*(?:g|mg|µg|μg)?", re.IGNORECASE)
-
-
-def _cell_value(cell: Tag, *, missing: float | None = None) -> float:
-    """The first number of a cell. ``missing`` is returned for a cell that shows only a unit or
-    a dash ("g", "-"), which is how fddb.info shows a value an own food does not have; with
-    ``missing=None`` (the default) such a cell raises like any other unreadable value."""
+def _cell_value(cell: Tag) -> float:
     # Carbs cells can carry bread units in a second tag, e.g. "246.2 g (20.5 BE)".
     first = cell.find(["span", "b"])
-    text = (first or cell).get_text(" ", strip=True)
-    if missing is not None and _NO_VALUE.fullmatch(text):
-        return missing
-    return _number(text)
+    return _number((first or cell).get_text(" ", strip=True))
 
 
 def _convert(text: str, target: str) -> float | None:
@@ -432,9 +423,15 @@ def _group_name(cell: Tag) -> str | None:
     return ((match.group(1) if match else text).strip()) or None
 
 
+# Accounts can name their meal groups "Morning / Noon / Evening" instead of
+# "Breakfast / Lunch / Dinner"; both mean the same meal.
+_MEAL_ALIASES = {"morning": "breakfast", "noon": "lunch", "midday": "lunch", "evening": "dinner"}
+
+
 def _meal_key(name: str | None) -> str:
     """ "snack_3" from "Snack 3", the key of a known meal; anything else is ``OTHER_MEAL``."""
     key = re.sub(r"[\s_-]+", "_", (name or "").strip().lower())
+    key = _MEAL_ALIASES.get(key, key)
     if key in MEALS:
         return key
     _LOGGER.debug("Unknown meal group %r counted as %r", name, OTHER_MEAL)
@@ -456,7 +453,52 @@ def _kcal_of_cell(cell: Tag) -> float:
     return _cell_value(cell)
 
 
-# Cell counts and nutrient columns of the two diary table layouts:
+# Column headers of the diary table (English page, German as a fallback). The kilocalories are
+# the "Calories" column of the oldest page, else the last cell under "Calorific value" (two cells
+# "kJ | kcal" on the old page, one merged "kJ (kcal)" cell on the redesigned one).
+_HEADER_KCAL = ("calories", "kalorien")
+_HEADER_ENERGY = ("calorific value", "brennwert")
+_HEADER_FAT = ("fat", "fett")
+_HEADER_CARBS = ("carbohydrates", "kohlenhydrate")
+_HEADER_PROTEIN = ("protein", "eiweiß", "eiweiss")
+
+
+def _columns_from_headers(table: Tag) -> tuple[tuple[int, int, int, int], int] | None:
+    """(kcal, fat, carbs, protein) cell indices and the total cell count, read from the header
+    row; None if the table has no header row with all four columns.
+
+    Matching by header keeps extra columns (fddb.info adds "Alcohol" on some pages) from
+    shifting the values, which counting cells cannot tell apart from the old six-cell layout.
+    """
+    header_row = next((r for r in table.find_all("tr") if r.find("th")), None)
+    if header_row is None:
+        return None
+    spans: dict[str, tuple[int, int]] = {}  # label -> (first index, width)
+    index = 0
+    for header in header_row.find_all("th", recursive=False):
+        try:
+            width = max(1, int(header.get("colspan", 1)))
+        except (TypeError, ValueError):
+            width = 1
+        label = " ".join(header.get_text(" ", strip=True).replace("\xa0", " ").split()).lower()
+        spans.setdefault(label, (index, width))
+        index += width
+
+    def first_of(labels: tuple[str, ...]) -> tuple[int, int] | None:
+        return next((spans[label] for label in labels if label in spans), None)
+
+    kcal = first_of(_HEADER_KCAL)
+    if kcal is None:
+        energy = first_of(_HEADER_ENERGY)
+        kcal = None if energy is None else (energy[0] + energy[1] - 1, 1)
+    found = [kcal, first_of(_HEADER_FAT), first_of(_HEADER_CARBS), first_of(_HEADER_PROTEIN)]
+    if any(item is None for item in found):
+        return None
+    kcal_i, fat_i, carbs_i, protein_i = (item[0] for item in found)
+    return (kcal_i, fat_i, carbs_i, protein_i), index
+
+
+# Cell counts and nutrient columns of the two diary table layouts (fallback without headers):
 # old "Product | Energy | Calories | Fat | Carbohydrates | Protein",
 # new "Product | Calorific value | Fat | Carbohydrates | Protein".
 _OLD_LAYOUT = (2, 3, 4, 5)
@@ -535,9 +577,9 @@ def _parse_product(
         name=name.strip(),
         amount=amount,
         calories=_kcal_of_cell(cells[kcal]),
-        fat=_cell_value(cells[fat], missing=0.0),
-        carbs=_cell_value(cells[carbs], missing=0.0),
-        protein=_cell_value(cells[protein], missing=0.0),
+        fat=_cell_value(cells[fat]),
+        carbs=_cell_value(cells[carbs]),
+        protein=_cell_value(cells[protein]),
         link=link.get("href") if link is not None else None,
         time=_time_of_day(time_span),
         meal=meal,
@@ -589,7 +631,12 @@ def _parse_diary(html: str, day: date) -> DiaryDay:
     # itself (six cells: "Energy | Calories | Fat | Carbohydrates | Protein"), on the new page on
     # each cell (five cells: "Calorific value | Fat | Carbohydrates | Protein").
     footer_cls = "myday-table-std-td-footer"
-    if footer_cls in (footer.get("class") or []):
+    from_headers = _columns_from_headers(table)
+    if from_headers is not None:
+        layout, width = from_headers
+        if len(footer_cells) != width:
+            raise FddbParseError("Unexpected totals row")
+    elif footer_cls in (footer.get("class") or []):
         layout = _OLD_LAYOUT
         if len(footer_cells) < max(_OLD_LAYOUT) + 1:
             raise FddbParseError("Unexpected totals row")

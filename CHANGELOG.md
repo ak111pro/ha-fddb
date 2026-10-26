@@ -1,5 +1,25 @@
 # Changelog
 
+## 0.2.3 – 2026-10-26
+
+### Fixed
+
+- Days with fddb.info's optional **Alcohol column** in the diary table were read wrongly or not
+  at all: six cells looked like the old layout, so values shifted (an empty alcohol cell "g"
+  gave "Not a number: 'g'", which is why 2026-10-23 was not stored). Columns are now matched by
+  their headers ("Calorific value", "Fat", "Carbohydrates", "Protein"); the cell-count rule only
+  remains as a fallback for pages without a header row. Same approach as
+  [fddb-exporter 2.6.3](https://github.com/itobey/fddb-exporter/releases/tag/2.6.3) by @itobey.
+
+### Changed
+
+- A fat, carbohydrate or protein cell that shows only a unit is unreadable again (as in 0.2.1),
+  instead of counting as 0 as in 0.2.2: that cell was the alcohol column, not a missing value.
+
+### Added
+
+- Meal groups named "Morning", "Noon" or "Evening" count as breakfast, lunch and dinner.
+
 ## 0.2.2 – 2026-10-26
 
 ### Fixed
