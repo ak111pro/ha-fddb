@@ -1,5 +1,21 @@
 # Changelog
 
+## 0.2.2 – 2026-10-26
+
+### Fixed
+
+- The diary could no longer be read (the sensors went `unknown`): fddb.info redesigned the daily
+  Details page. Both page versions are now read. On the new page the totals row has five cells
+  instead of six and shows the energy as one cell "2749 kJ (657 kcal)", the meal rows as
+  "2749 kJ / 657 kcal", and the bread units in a separate column; sugar and fibre are read from
+  their dedicated totals row. Being logged out is detected from the logout link on the new page.
+  Verified against the live redesigned page.
+- Meal rows of the new page are recognised by their own marker (`myday-mealtotal`), and their
+  kilocalories also when shown as plain text ("2749 kJ / 657 kcal").
+- A product whose fat, carbohydrate or protein value fddb.info shows only as a unit or a dash
+  (own foods without that value) counts as 0 instead of making the whole day unreadable. Any
+  other unreadable value still stops the read, so a changed page never gives wrong numbers.
+
 ## 0.2.1 – 2026-10-21
 
 ### Fixed
