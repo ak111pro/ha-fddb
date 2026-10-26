@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from datetime import date
+import re
 
 import pytest
 
@@ -914,18 +915,45 @@ def test_new_layout_kcal_without_the_nested_tag(day_en_html):
     assert parse_diary(html, DAY).meals["snack_2"].calories == 657.0
 
 
-def test_new_layout_product_without_a_value(day_en_html):
-    # An own food without a fat value shows only the unit; that is 0, not an unreadable day.
-    html = day_en_html.replace(
-        '<span class="stext">16.5 g</span>', '<span class="stext">g</span>', 1
-    )
-    diary = parse_diary(html, DAY)
-    assert diary.products[1].fat == 0.0
-    assert diary.calories == 657.0
-
-
-def test_new_layout_product_with_text_instead_of_a_value_still_raises(day_en_html):
+def test_new_layout_product_with_only_a_unit_raises(day_en_html):
+    # A macro cell that shows only its unit is unreadable, never silently 0 (same as the exporter).
     fat = '<span class="stext">16.5 g</span>'
-    html = day_en_html.replace(fat, '<span class="stext">n/a</span>', 1)
+    html = day_en_html.replace(fat, '<span class="stext">g</span>', 1)
     with pytest.raises(FddbParseError, match="Not a number"):
         parse_diary(html, DAY)
+
+
+def _with_alcohol_column(html: str, value: str) -> str:
+    """The new-layout fixture with fddb.info's optional "Alcohol" column appended."""
+    html = re.sub(r"(Protein&nbsp;<img[^>]*></th>)", r"\1<th>Alcohol</th>", html, count=1)
+    return re.sub(
+        r"(<tr[^>]*>(?:(?!</tr>).)*?<td[^>]*>(?:(?!</tr>).)*?)</tr>",
+        lambda m: m.group(1) + f'<td class="x"><span class="stext">{value}</span></td></tr>',
+        html,
+        flags=re.S,
+    )
+
+
+@pytest.mark.parametrize("alcohol", [" g", "0 g", "32 g"])
+def test_new_layout_with_an_alcohol_column(day_en_html, alcohol):
+    # Six cells with "Alcohol" last must not be read as the old six-cell layout.
+    html = _with_alcohol_column(day_en_html, alcohol)
+    assert html.count("<th>Alcohol</th>") == 1
+    day = parse_diary(html, DAY)
+    assert (day.calories, day.fat, day.carbs, day.protein) == (657.0, 26.6, 38.5, 60.7)
+    assert (day.products[1].calories, day.products[1].protein) == (270.0, 28.5)
+    assert day.meals["snack_2"].calories == 657.0
+
+
+def test_new_layout_without_a_header_row_falls_back_to_the_totals_row(day_en_html):
+    html = re.sub(r"<tr><th.*?</tr>", "", day_en_html, count=1, flags=re.S)
+    assert "<th" not in html.split('class="myday-table-std"')[1].split("</table>")[0]
+    assert parse_diary(html, DAY).calories == 657.0
+
+
+@pytest.mark.parametrize(
+    ("label", "key"), [("Morning", "breakfast"), ("Noon", "lunch"), ("Evening", "dinner")]
+)
+def test_meal_names_morning_noon_evening(day_en_html, label, key):
+    html = day_en_html.replace("Snack 2: 3 products", f"{label}: 3 products")
+    assert set(parse_diary(html, DAY).meals) == {key}
