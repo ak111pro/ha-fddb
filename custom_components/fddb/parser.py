@@ -272,10 +272,19 @@ def _number(text: str) -> float:
         raise FddbParseError(f"Not a number: {text!r}") from err
 
 
-def _cell_value(cell: Tag) -> float:
+_NO_VALUE = re.compile(r"[-–—]?\s*(?:g|mg|µg|μg)?", re.IGNORECASE)
+
+
+def _cell_value(cell: Tag, *, missing: float | None = None) -> float:
+    """The first number of a cell. ``missing`` is returned for a cell that shows only a unit or
+    a dash ("g", "-"), which is how fddb.info shows a value an own food does not have; with
+    ``missing=None`` (the default) such a cell raises like any other unreadable value."""
     # Carbs cells can carry bread units in a second tag, e.g. "246.2 g (20.5 BE)".
     first = cell.find(["span", "b"])
-    return _number((first or cell).get_text(" ", strip=True))
+    text = (first or cell).get_text(" ", strip=True)
+    if missing is not None and _NO_VALUE.fullmatch(text):
+        return missing
+    return _number(text)
 
 
 def _convert(text: str, target: str) -> float | None:
@@ -380,19 +389,28 @@ def _bread_units(carbs_cell: Tag, carbs: float) -> float:
 
 def is_logged_out(soup: BeautifulSoup) -> bool:
     """True if the page shows the login link instead of a logged-in session."""
+    # A logged-in session always offers logout; a logged-out page offers login instead.
+    if soup.select_one('a[href*="action=logout"]'):
+        return False
+    if soup.select_one('a[href*="action=login"], form[action*="action=login"]'):
+        return True
+    # Older pages (and fixtures) show the login link in the quicklinks bar without a query.
     for link in soup.select("div.quicklinks a.v2hdlnk"):
         if link.get_text(strip=True).lower() in _LOGIN_TEXTS:
             return True
     return False
 
 
-def _is_category_row(cells: list[Tag]) -> bool:
+def _is_category_row(row: Tag, cells: list[Tag]) -> bool:
     """True for a meal group row ("Dinner: 4 products" with the group's subtotals).
 
-    Older pages draw these rows in grey (``color:#aaaaaa``). Since 2026-10-21 fddb.info no longer
+    The redesigned page (2026-10-23) marks these rows with ``class="myday-mealtotal"``.
+    Older pages draw them in grey (``color:#aaaaaa``). Since 2026-10-21 fddb.info no longer
     does, so a row is also a group row when its first cell, without a link to the food database,
     reads "<meal>: <n> product(s)". Own foods have no link either, but never that label.
     """
+    if "myday-mealtotal" in (row.get("class") or []):
+        return True
     for cell in cells:
         for span in cell.select("span[style]"):
             if "color:#aaaaaa" in span["style"].replace(" ", "").lower():
@@ -423,14 +441,37 @@ def _meal_key(name: str | None) -> str:
     return OTHER_MEAL
 
 
-def _group_subtotal(cells: list[Tag]) -> Meal | None:
+def _kcal_of_cell(cell: Tag) -> float:
+    """Kilocalories of an energy cell, whichever way the page shows them.
+
+    Old layout: "Energy" (kJ) and "Calories" (kcal) in separate cells. New layout: one merged
+    cell, e.g. "2749 kJ (657 kcal)" with the kilocalories in a nested tag, or "2749 kJ / 657 kcal".
+    """
+    nested = cell.select_one("span.md-kcal")
+    if nested is not None:
+        return _number(nested.get_text(" ", strip=True))
+    match = _KCAL.search(cell.get_text(" ", strip=True))
+    if match is not None:
+        return _number(match.group(1))
+    return _cell_value(cell)
+
+
+# Cell counts and nutrient columns of the two diary table layouts:
+# old "Product | Energy | Calories | Fat | Carbohydrates | Protein",
+# new "Product | Calorific value | Fat | Carbohydrates | Protein".
+_OLD_LAYOUT = (2, 3, 4, 5)
+_NEW_LAYOUT = (1, 2, 3, 4)
+
+
+def _group_subtotal(cells: list[Tag], layout: tuple[int, int, int, int]) -> Meal | None:
     """The subtotals shown on a group row (kcal, fat, carbs, protein), None if not readable."""
+    kcal, fat, carbs, protein = layout
     try:
         return Meal(
-            calories=_cell_value(cells[2]),
-            fat=_cell_value(cells[3]),
-            carbs=_cell_value(cells[4]),
-            protein=_cell_value(cells[5]),
+            calories=_kcal_of_cell(cells[kcal]),
+            fat=_cell_value(cells[fat]),
+            carbs=_cell_value(cells[carbs]),
+            protein=_cell_value(cells[protein]),
         )
     except FddbParseError:
         return None
@@ -468,7 +509,12 @@ def _time_of_day(span: Tag | None) -> str | None:
     return f"{int(match.group(1)):02d}:{match.group(2)}" if match else None
 
 
-def _parse_product(cells: list[Tag], meal: str | None = None) -> Product:
+def _parse_product(
+    cells: list[Tag],
+    meal: str | None = None,
+    layout: tuple[int, int, int, int] = _OLD_LAYOUT,
+) -> Product:
+    kcal, fat, carbs, protein = layout
     first = cells[0]
     time_span = first.select_one("span.mydayshowtime")
     link = first.find("a")
@@ -488,10 +534,10 @@ def _parse_product(cells: list[Tag], meal: str | None = None) -> Product:
     return Product(
         name=name.strip(),
         amount=amount,
-        calories=_cell_value(cells[2]),
-        fat=_cell_value(cells[3]),
-        carbs=_cell_value(cells[4]),
-        protein=_cell_value(cells[5]),
+        calories=_kcal_of_cell(cells[kcal]),
+        fat=_cell_value(cells[fat], missing=0.0),
+        carbs=_cell_value(cells[carbs], missing=0.0),
+        protein=_cell_value(cells[protein], missing=0.0),
         link=link.get("href") if link is not None else None,
         time=_time_of_day(time_span),
         meal=meal,
@@ -539,34 +585,52 @@ def _parse_diary(html: str, day: date) -> DiaryDay:
 
     footer, product_rows = rows[-1], rows[:-1]
     footer_cells = footer.find_all("td", recursive=False)
-    if len(footer_cells) < 6:
+    # The totals row marks itself with "myday-table-std-td-footer": on the old page on the row
+    # itself (six cells: "Energy | Calories | Fat | Carbohydrates | Protein"), on the new page on
+    # each cell (five cells: "Calorific value | Fat | Carbohydrates | Protein").
+    footer_cls = "myday-table-std-td-footer"
+    if footer_cls in (footer.get("class") or []):
+        layout = _OLD_LAYOUT
+        if len(footer_cells) < max(_OLD_LAYOUT) + 1:
+            raise FddbParseError("Unexpected totals row")
+    elif all(footer_cls in (cell.get("class") or []) for cell in footer_cells):
+        # Some accounts put the class on the cells; the number of cells says which page layout.
+        if len(footer_cells) == max(_OLD_LAYOUT) + 1:
+            layout = _OLD_LAYOUT
+        elif len(footer_cells) == max(_NEW_LAYOUT) + 1:
+            layout = _NEW_LAYOUT
+        else:
+            raise FddbParseError("Unexpected totals row")
+    else:
         raise FddbParseError("Unexpected totals row")
+    kcal_i, fat_i, carbs_i, protein_i = layout
+    min_cells = max(layout) + 1
 
     products = []
     meal: str | None = None  # the group the following product rows belong to
     groups: list[tuple[str | None, Meal | None, list[Product]]] = []
     for row in product_rows:
         cells = row.find_all("td", recursive=False)
-        if len(cells) < 6:
+        if len(cells) < min_cells:
             continue
-        if _is_category_row(cells):
+        if _is_category_row(row, cells):
             meal = _group_name(cells[0])
-            groups.append((meal, _group_subtotal(cells), []))
+            groups.append((meal, _group_subtotal(cells, layout), []))
             continue
-        product = _parse_product(cells, meal)
+        product = _parse_product(cells, meal, layout)
         products.append(product)
         if groups:
             groups[-1][2].append(product)
 
-    carbs = _cell_value(footer_cells[4])
+    total_carbs = _cell_value(footer_cells[carbs_i])
     nutrients = _nutrients(soup)
-    nutrients["bread_units"] = _bread_units(footer_cells[4], carbs)
+    nutrients["bread_units"] = _bread_units(footer_cells[carbs_i], total_carbs)
     return DiaryDay(
         day=day,
-        calories=_cell_value(footer_cells[2]),
-        fat=_cell_value(footer_cells[3]),
-        carbs=carbs,
-        protein=_cell_value(footer_cells[5]),
+        calories=_kcal_of_cell(footer_cells[kcal_i]),
+        fat=_cell_value(footer_cells[fat_i]),
+        carbs=total_carbs,
+        protein=_cell_value(footer_cells[protein_i]),
         sugar=_labelled_value(soup, _SUGAR),
         fibre=_labelled_value(soup, _FIBRE),
         products=products,
