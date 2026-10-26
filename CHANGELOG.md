@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.2.2 – 2026-10-26
+
+### Fixed
+
+- The diary could no longer be read (the sensors went `unknown`): fddb.info redesigned the daily
+  Details page. Both page versions are now read. On the new page the totals row has five cells
+  instead of six and shows the energy as one cell "2749 kJ (657 kcal)", the meal rows as
+  "2749 kJ / 657 kcal", and the bread units in a separate column; sugar and fibre are read from
+  their dedicated totals row. Being logged out is detected from the logout link on the new page.
+  Verified against the live redesigned page.
+
 ## 0.2.1 – 2026-10-21
 
 ### Fixed

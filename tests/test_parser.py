@@ -851,3 +851,48 @@ def test_a_damaged_stored_diary_keeps_only_what_is_valid():
     assert [(p.name, p.calories, p.link) for p in rebuilt.products] == [("Apple", 52.0, None)]
     assert parser_module.DiaryDay.from_dict({"day": "13.10.2026"}) is None
     assert parser_module.DiaryDay.from_dict(None) is None
+
+
+# --- the Details page after the fddb.info redesign (diary_day_en.html) -----------------------
+
+
+@pytest.fixture
+def day_en_html(load_fixture) -> str:
+    return load_fixture("diary_day_en.html")
+
+
+def test_new_layout_totals(day_en_html):
+    # Five footer cells, the class on each cell; energy is merged as "2749 kJ (657 kcal)".
+    day = parse_diary(day_en_html, DAY)
+    assert (day.calories, day.fat, day.carbs, day.protein) == (657.0, 26.6, 38.5, 60.7)
+    assert (day.sugar, day.fibre) == (1.7, 1.4)
+    assert (day.balance, day.goal) == (-944.0, 1600.0)
+    assert day.has_entries
+
+
+def test_new_layout_products(day_en_html):
+    products = parse_diary(day_en_html, DAY).products
+    assert len(products) == 3
+    assert [p.amount for p in products] == ["150 g", "150 g", "72 g"]
+    assert products[0].name.startswith("Winter Steaks")
+    assert products[2].name.startswith("Laugenstange")
+    assert (products[1].calories, products[1].fat, products[1].carbs) == (270.0, 16.5, 1.8)
+    assert all(p.meal == "Snack 2" and p.link for p in products)
+    assert [p.time for p in products] == ["13:38", "13:38", "13:33"]
+
+
+def test_new_layout_meal_subtotals(day_en_html):
+    meals = parse_diary(day_en_html, DAY).meals
+    assert set(meals) == {"snack_2"}
+    assert meals["snack_2"] == parser_module.Meal(657.0, 26.6, 38.5, 60.7, 3)
+
+
+def test_new_layout_extra_nutrients_and_bread_units(day_en_html):
+    nutrients = parse_diary(day_en_html, DAY).nutrients
+    assert nutrients["bread_units"] == 3.2
+    assert {"salt", "water", "vitamin_c"} <= set(nutrients)
+    assert all(isinstance(v, float) for v in nutrients.values())
+
+
+def test_new_layout_is_logged_in(day_en_html):
+    parse_diary(day_en_html, DAY)  # must not raise FddbAuthError
