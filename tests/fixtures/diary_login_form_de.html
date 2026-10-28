@@ -1,0 +1,27 @@
+<!--
+  Source: synthetic (German counterpart of diary_login_form_en). The German
+  account page was NOT fetched; the English live capture is the evidence for
+  the page structure, and only the visible texts are translated
+  ("Anmelden" instead of "Login"). Do not treat the wording as a live sample.
+
+  Purpose: verify that is_logged_out() also matches the German login link
+  ("anmelden") in path 3 of the detection (div.quicklinks a.v2hdlnk).
+-->
+<!DOCTYPE html>
+<html lang="de">
+<head><meta charset="utf-8"><title>Konto - Fddb</title></head>
+<body>
+<div class="quicklinks">
+  <a class="v2hdlnk" href="/db/i18n/konto/?lang=de">Anmelden</a>
+</div>
+<h1>Ihr Konto</h1>
+<form action="/db/i18n/konto/?lang=de&amp;action=login" method="POST">
+  <table>
+    <tr><td><b>E-Mail-Adresse</b> oder Benutzername</td><td><input type="text" name="user"></td></tr>
+    <tr><td>Passwort</td><td><input type="password" name="pass"></td></tr>
+  </table>
+  <input type="hidden" name="returnurl" value="https://example.invalid/db/i18n/profile20/?lang=de">
+  <input type="submit" value="Anmelden">
+</form>
+</body>
+</html>
