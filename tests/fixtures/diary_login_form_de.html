@@ -1,0 +1,22 @@
+<!-- SYNTHETIC TEST FIXTURE (2026-10-28): German variant of the login-form page.
+     The German wording is a translation (not observed live); the form structure
+     matches the live page. All content is example data. -->
+<!DOCTYPE html>
+<html lang="de">
+<head><meta charset="utf-8"><title>Konto - Fddb</title></head>
+<body>
+<ul class="topmenu">
+  <li><a href="/db/i18n/registrierung/?lang=de">Registrieren</a></li>
+  <li><a href="/db/i18n/konto/?lang=de">Anmelden</a></li>
+</ul>
+<h1>Ihr Konto</h1>
+<form action="/db/i18n/konto/?lang=de&amp;action=login" method="POST">
+  <table>
+    <tr><td><b>E-Mail-Adresse</b> oder Benutzername</td><td><input type="text" name="user"></td></tr>
+    <tr><td>Passwort</td><td><input type="password" name="pass"></td></tr>
+  </table>
+  <input type="hidden" name="returnurl" value="https://example.invalid/db/i18n/profile20/?lang=de">
+  <input type="submit" value="Anmelden">
+</form>
+</body>
+</html>

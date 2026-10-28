@@ -1,0 +1,22 @@
+<!-- SYNTHETIC TEST FIXTURE (2026-10-28): minimal example of the redesigned-site
+     login page served with HTTP 200 when the session is gone. Structure taken
+     from the live account page; all content is example data. -->
+<!DOCTYPE html>
+<html lang="en">
+<head><meta charset="utf-8"><title>Account - Fddb</title></head>
+<body>
+<ul class="topmenu">
+  <li><a href="/db/i18n/register/?lang=en">Register</a></li>
+  <li><a href="/db/i18n/account/?lang=en">Login</a></li>
+</ul>
+<h1>Your account</h1>
+<form action="/db/i18n/account/?lang=en&amp;action=login" method="POST">
+  <table>
+    <tr><td><b>E-mail address</b> or username</td><td><input type="text" name="user"></td></tr>
+    <tr><td>Password</td><td><input type="password" name="pass"></td></tr>
+  </table>
+  <input type="hidden" name="returnurl" value="https://example.invalid/db/i18n/profile20/?lang=en">
+  <input type="submit" value="Sign in">
+</form>
+</body>
+</html>

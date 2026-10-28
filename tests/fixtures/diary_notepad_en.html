@@ -1,0 +1,18 @@
+<!-- SYNTHETIC TEST FIXTURE (2026-10-28): minimal example of the notepad page
+     (the diary hub, target of the myday20 redirect) served with HTTP 200 to an
+     anonymous request. It has a plain "Login" menu link but no login form.
+     Structure from the live page; content is example data. -->
+<!DOCTYPE html>
+<html lang="en">
+<head><meta charset="utf-8"><title>Food Diary - Fddb</title></head>
+<body>
+<ul class="topmenu">
+  <li><a href="/db/i18n/register/?lang=en">Register</a></li>
+  <li><a href="/db/i18n/account/?lang=en">Login</a></li>
+</ul>
+<h1>Food diary</h1>
+<form name="npfef" method="GET" action="db/i18n/notepad/">
+  <input type="submit" value="Go to your diary">
+</form>
+</body>
+</html>
