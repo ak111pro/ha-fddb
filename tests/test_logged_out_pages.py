@@ -5,6 +5,14 @@ HTML comment. All URL behaviour below was verified with ``curl -L`` on
 2026-10-28 while logged out (HTTP status and final URL only, one request per
 URL); the results are recorded in the fixture headers.
 
+Detection rule (since this module's bug was fixed): the logout marker of a logged-in
+session wins — an ``account/?...&action=logout`` link or a topbar/quicklinks link whose
+text is "Logout"/"Abmelden". Without it, a login marker (login link or form, or a
+"Login"/"Anmelden" link in the topbar as well as in the old quicklinks bar) makes the
+page logged out. Every logged-out page variant below lacks the logout marker and has
+the topbar login link, so it raises ``FddbAuthError``; every logged-in fixture has the
+logout marker (the profile page only through its link text, not the query).
+
 Live-verified page variants:
 
 1. Login form page (``diary_login_form_en.html`` from the live account page,
@@ -13,18 +21,16 @@ Live-verified page variants:
    a ``form action="...&action=login"``. Detected by path 2 of
    ``is_logged_out``.
 2. Notepad page (``diary_notepad_en.html`` from the live notepad URL):
-   "Food Diary" served with HTTP 200. Login is only a plain menu link, so no
-   detection path matches — the integration currently sees an empty day.
+   "Food Diary" served with HTTP 200. Login is only a plain menu link, so the
+   old parser saw an empty day; the topbar login link now detects it.
    ``myday20/?lang=en`` without query parameters also ends up here, but the
    diary URL with a date range (see 3) does not.
 3. Diary "Details" page (``diary_logged_out_details_en.html`` from a live
    capture): the URL the integration actually requests,
    ``myday20/?lang=en&p=...&q=...``, answers with a separate "Details" day
    page (HTTP 200, no redirect) that shows "0 kJ (0 kcal) from 0 food items"
-   with no login form and no logout link. It matches none of the
-   ``is_logged_out`` paths, so the integration reports 0 kcal while being
-   logged out — the first fixture of this module is a strict xfail that
-   documents this real bug against the current parser.
+   with no login form and no logout link. The old parser reported 0 kcal while
+   being logged out; ``parse_diary`` now raises ``FddbAuthError``.
 """
 
 from __future__ import annotations
@@ -60,33 +66,25 @@ def test_login_form_page_detected_as_logged_out(fixture: str) -> None:
 
 
 @pytest.mark.parametrize("fixture", ["diary_notepad_en.html", "diary_logged_out_details_en.html"])
-def test_plain_login_link_alone_is_not_detected(fixture: str) -> None:
-    """Notepad and Details pages only carry a plain topbar "Login" link."""
+def test_plain_login_link_alone_is_detected(fixture: str) -> None:
+    """Notepad and Details pages only carry a plain topbar "Login" link and no
+    logout marker, which is enough to count them as logged out."""
     soup = BeautifulSoup(load(fixture), "html.parser")
-    assert not is_logged_out(soup)
+    assert is_logged_out(soup)
     assert soup.select_one('a[href*="account"]')
 
 
-def test_diary_notepad_parses_as_empty_day() -> None:
-    """The current parser sees the notepad page as a valid but empty day."""
-    result = parse_diary(load("diary_notepad_en.html"), date(2026, 10, 28))
-    assert result.calories == 0.0
-    assert not result.has_entries
+def test_diary_notepad_raises_auth_error() -> None:
+    """The notepad page is not a valid day: it is the logged-out landing page."""
+    with pytest.raises(FddbAuthError):
+        parse_diary(load("diary_notepad_en.html"), date(2026, 10, 28))
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="Real bug (live capture): the logged-out 'Details' day page is a plain "
-    "HTTP 200 with '0 kJ (0 kcal) from 0 food items' and no login form, so the "
-    "current parser reports 0 kcal for a logged-out session instead of raising "
-    "FddbAuthError.",
-)
-def test_details_page_logged_out_is_not_reported_as_zero_kcal() -> None:
-    """The Details day page the integration really gets must not read as valid data."""
-    html = load("diary_logged_out_details_en.html")
-    result = parse_diary(html, date(2026, 10, 26))
-    assert not result.has_entries and result.calories == 0.0
-    assert False, "logged-out Details page parsed as a valid empty day"
+def test_details_page_logged_out_raises_auth_error() -> None:
+    """The Details day page the integration really gets (HTTP 200, "0 kJ (0 kcal)
+    from 0 food items", no login form) must raise instead of reporting 0 kcal."""
+    with pytest.raises(FddbAuthError):
+        parse_diary(load("diary_logged_out_details_en.html"), date(2026, 10, 26))
 
 
 # -- what the fixtures document about the pages themselves --------------
@@ -138,6 +136,24 @@ def test_logged_in_fixtures_keep_logout_link(fixture: str) -> None:
     soup = BeautifulSoup(load(fixture), "html.parser")
     assert any(link.text.strip().lower() == "logout" for link in soup.find_all("a"))
     assert not soup.select('form[action*="login"]')
+    assert not is_logged_out(soup)
+
+
+@pytest.mark.parametrize(
+    "fixture",
+    ["diary_day_en.html", "diary_empty.html", "diary_full.html", "diary_meals.html"],
+)
+def test_logged_in_diaries_still_parse(fixture: str) -> None:
+    """Negative tests for the logout-marker rule: logged-in diary pages must not
+    raise (their parsed values are asserted in test_parser.py)."""
+    result = parse_diary(load(fixture), date(2026, 10, 26))
+    assert isinstance(result.calories, float)
+
+
+def test_logged_in_profile_still_parses() -> None:
+    """The profile page's only logout marker is the quicklink text "Logout"
+    (no action=logout query), so the text-based marker check is required."""
+    assert parse_profile(load("profile_en.html")).weight_kg is not None
 
 
 def test_notepad_page_structure() -> None:

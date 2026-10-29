@@ -15,8 +15,9 @@ DIARY_URL = f"{BASE_URL}/db/i18n/myday20/?lang=en&p={{start}}&q={{end}}"
 # English, for the same reason.
 PROFILE_URL = f"{BASE_URL}/db/i18n/profile20/?lang=en"
 # Where the user opens their diary in a browser (device "Visit" link). The desktop diary page
-# (myday20) answers with an error page unless the browser is logged in; the mobile notepad
-# redirects to the login page instead and shows the diary after signing in.
+# (myday20) answers with a normal-looking "0 kJ (0 kcal) from 0 food items" Details page unless
+# the browser is logged in; the mobile notepad redirects to the login page instead and shows the
+# diary after signing in.
 DIARY_WEB_URL = "https://fddb.mobi/notepad/"
 SESSION_COOKIE = "fddb"
 
