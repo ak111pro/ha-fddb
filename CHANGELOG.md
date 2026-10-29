@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.2.4 – 2026-10-29
+
+### Fixed
+
+- A logged-out diary page could look like a normal day page (HTTP 200, "0 kJ (0 kcal) from 0 food
+  items") and was recorded as a 0-kcal day. Such pages are now recognized as logged out
+  (`FddbAuthError`), so the integration logs in again and re-reads the day.
+
 ## 0.2.3 – 2026-10-26
 
 ### Fixed

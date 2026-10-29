@@ -141,7 +141,13 @@ def test_logged_in_fixtures_keep_logout_link(fixture: str) -> None:
 
 @pytest.mark.parametrize(
     "fixture",
-    ["diary_day_en.html", "diary_empty.html", "diary_full.html", "diary_meals.html"],
+    [
+        "diary_day_en.html",
+        "diary_empty.html",
+        "diary_full.html",
+        "diary_meals.html",
+        "diary_normal.html",
+    ],
 )
 def test_logged_in_diaries_still_parse(fixture: str) -> None:
     """Negative tests for the logout-marker rule: logged-in diary pages must not
