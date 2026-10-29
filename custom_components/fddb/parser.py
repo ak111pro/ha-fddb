@@ -209,6 +209,10 @@ _AMOUNT = re.compile(r"^(\d[\d.,/]*\s+\S+)\s+(.+)$")
 _SUGAR = re.compile(r"thereof\s+sugar", re.IGNORECASE)
 _FIBRE = re.compile(r"dietary\s+fib(re|er)", re.IGNORECASE)
 _LOGIN_TEXTS = {"login", "anmelden"}
+_LOGOUT_TEXTS = {"logout", "abmelden"}
+# Bars fddb.info uses for the session links: the old quicklinks bar and the topbar of
+# the redesigned (2026-10) pages.
+_SESSION_LINKS = "div.quicklinks a.v2hdlnk, ul.topbar-links a"
 
 # Per-day values of the nutrient tables below the diary (the summary table, "Vitamins" and
 # "Minerals"), found by their English label: key -> (label, unit the value is converted to).
@@ -378,17 +382,40 @@ def _bread_units(carbs_cell: Tag, carbs: float) -> float:
     return round(carbs / GRAMS_PER_BREAD_UNIT, 1)
 
 
-def is_logged_out(soup: BeautifulSoup) -> bool:
-    """True if the page shows the login link instead of a logged-in session."""
-    # A logged-in session always offers logout; a logged-out page offers login instead.
+def _has_logout_marker(soup: BeautifulSoup) -> bool:
+    """True if the page carries a marker only a logged-in session gets.
+
+    Either an ``account/?...&action=logout`` link or a topbar/quicklinks link whose
+    text is "Logout"/"Abmelden" (the profile page links to ``account/?lang=en`` with
+    the text "Logout", without the query).
+    """
     if soup.select_one('a[href*="action=logout"]'):
+        return True
+    for link in soup.select(_SESSION_LINKS):
+        if link.get_text(strip=True).lower() in _LOGOUT_TEXTS:
+            return True
+    return False
+
+
+def is_logged_out(soup: BeautifulSoup) -> bool:
+    """True if the page belongs to a logged-out session.
+
+    A logged-in session always offers logout, so its marker wins. Since the 2026-10
+    redesign a logged-out session can be served a normal-looking day page ("0 kJ (0
+    kcal) from 0 food items") with HTTP 200 and no login form, whose only clue is the
+    plain "Login" link in the topbar. Pages with neither marker (a maintenance or
+    truncated page) are left to the parsers, which report them as parse errors.
+    """
+    if _has_logout_marker(soup):
         return False
     if soup.select_one('a[href*="action=login"], form[action*="action=login"]'):
         return True
-    # Older pages (and fixtures) show the login link in the quicklinks bar without a query.
-    for link in soup.select("div.quicklinks a.v2hdlnk"):
+    # Logged-out pages offer login instead of logout: older pages in the quicklinks bar
+    # without a query, the redesigned pages (2026-10) as a plain "Login" link in the topbar.
+    for link in soup.select(_SESSION_LINKS):
         if link.get_text(strip=True).lower() in _LOGIN_TEXTS:
             return True
+    # Neither marker (a maintenance or truncated page): leave it to the parsers to fail.
     return False
 
 
