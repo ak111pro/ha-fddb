@@ -3,8 +3,10 @@
 from __future__ import annotations
 
 import asyncio
+from collections.abc import Callable
 from datetime import date, datetime, time, timedelta
 import logging
+from typing import Any, TypeVar
 
 import aiohttp
 
@@ -28,6 +30,8 @@ from .parser import (
 
 _LOGGER = logging.getLogger(__name__)
 
+_T = TypeVar("_T")
+
 USER_AGENT = "ha-fddb (Home Assistant integration; +https://github.com/ak111pro/ha-fddb)"
 
 
@@ -48,6 +52,16 @@ def diary_window(day: date) -> tuple[int, int]:
     a year when the clocks change (23 or 25 hours long), as the fddb-exporter fixed in 2.5.0.
     """
     return _day_start(day), _day_start(day + timedelta(days=1)) - 1
+
+
+async def _in_executor(func: Callable[..., _T], *args: Any) -> _T:
+    """Run a CPU-bound parser off the event loop.
+
+    The diary and profile pages are tens of kilobytes; building and searching their
+    BeautifulSoup trees would block Home Assistant on slow hardware. ``None`` selects the
+    loop's default executor, which is Home Assistant's own executor when running inside it.
+    """
+    return await asyncio.get_running_loop().run_in_executor(None, func, *args)
 
 
 class FddbClient:
@@ -112,11 +126,11 @@ class FddbClient:
             if self._cookie is None:
                 await self.login()
             try:
-                return parse_diary(await self._get_diary_html(day), day)
+                return await _in_executor(parse_diary, await self._get_diary_html(day), day)
             except FddbAuthError:
                 _LOGGER.debug("FDDB session expired, logging in again")
                 await self.login()
-                return parse_diary(await self._get_diary_html(day), day)
+                return await _in_executor(parse_diary, await self._get_diary_html(day), day)
 
     async def fetch_profile(self) -> Profile:
         """Fetch and parse the settings page, logging in (again) when needed."""
@@ -124,11 +138,11 @@ class FddbClient:
             if self._cookie is None:
                 await self.login()
             try:
-                return parse_profile(await self._get_html(PROFILE_URL))
+                return await _in_executor(parse_profile, await self._get_html(PROFILE_URL))
             except FddbAuthError:
                 _LOGGER.debug("FDDB session expired, logging in again")
                 await self.login()
-                return parse_profile(await self._get_html(PROFILE_URL))
+                return await _in_executor(parse_profile, await self._get_html(PROFILE_URL))
 
     async def validate(self) -> None:
         """Log in and read today's page once (used by the config flow)."""
