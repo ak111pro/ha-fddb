@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.2.5 – 2026-11-02
+
+### Fixed
+
+- The diary and profile pages are now parsed in Home Assistant's executor instead of on the
+  event loop. Building and searching their HTML trees (tens of kilobytes per page, on every poll
+  and for each day of the 31-day history backfill) could block Home Assistant for a moment on
+  slower hardware such as a Raspberry Pi. Thanks to the HACS review for spotting it.
+
 ## 0.2.4 – 2026-10-29
 
 ### Fixed
