@@ -77,7 +77,8 @@ class FddbConfigFlow(ConfigFlow, domain=DOMAIN):
             errors = await self._validate(username, user_input[CONF_PASSWORD])
             if not errors:
                 return self.async_create_entry(
-                    title=username,
+                    # Not the login: it may be an e-mail address. Users can rename the entry.
+                    title="FDDB",
                     data={CONF_USERNAME: username, CONF_PASSWORD: user_input[CONF_PASSWORD]},
                 )
         return self.async_show_form(

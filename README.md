@@ -40,7 +40,8 @@ no public API. Everything is configured in the UI.
 
 ## Entities
 
-All entities belong to one service device named `FDDB <account>`. Names are shown here
+All entities belong to one service device named `FDDB` (rename it in Home Assistant if you
+add several accounts; the login is never used as a name). Names are shown here
 in English with the German name in parentheses.
 
 | Entity | Type | Unit | Description |
