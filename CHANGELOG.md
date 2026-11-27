@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.2.6 – 2026-11-27
+
+### Changed
+
+- The device is now named `FDDB` and new entries are titled `FDDB`, instead of using the login.
+  The login is often an e-mail address, and with `has_entity_name` it ended up in the device name
+  and in every entity id derived from it. Existing entity ids are kept (Home Assistant stores
+  them); only the device name changes. With several accounts, rename the devices or entries in
+  Home Assistant. Thanks to the HACS review for spotting it.
+
 ## 0.2.5 – 2026-11-02
 
 ### Fixed

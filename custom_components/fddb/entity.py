@@ -21,7 +21,9 @@ class FddbEntity(CoordinatorEntity[FddbCoordinator]):
         self._attr_translation_key = key
         self._attr_device_info = DeviceInfo(
             identifiers={(DOMAIN, entry.unique_id or entry.entry_id)},
-            name=f"FDDB {entry.title}",
+            # Fixed name: the entry title is the login (often an e-mail address), which must
+            # not end up in the device name or in the entity ids derived from it.
+            name="FDDB",
             manufacturer="FDDB",
             model="Food diary",
             entry_type=DeviceEntryType.SERVICE,

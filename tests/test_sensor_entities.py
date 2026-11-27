@@ -563,3 +563,13 @@ def test_meals_are_enabled_by_default_except_the_other_bucket(sensor_module):
 def test_meal_attribute_names_are_not_the_products_list(sensor_module, load_fixture):
     # the heavy ``products`` attribute stays on the calories sensor only
     assert "products" not in _meal(sensor_module, "dinner", load_fixture).extra_state_attributes
+
+
+def test_device_name_does_not_contain_the_login(sensor_module, load_fixture):
+    # The entry title used to be the login (often an e-mail address); it must not reach the
+    # device name, because entity ids are derived from it.
+    first = _make_sensor(sensor_module, "calories", load_fixture)
+    first.coordinator.config_entry.title = "someone@example.com"
+    sensor = sensor_module.FddbSensor(first.coordinator, first.entity_description)
+    assert sensor.device_info["name"] == "FDDB"
+    assert "example.com" not in str(sensor.device_info)
